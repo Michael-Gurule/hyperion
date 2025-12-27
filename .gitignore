@@ -1,0 +1,72 @@
+# .gitignore for Hyperion Project V1.0
+
+# --- OS generated files ---
+.DSS_Store
+Thumbs.db
+
+# --- Python / Environment ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.venv
+.evn
+pip-log.txt
+pip-delete-this-directory.txt
+set.cfg
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# -- Data -- 
+data/raw/
+data/processed/
+*.csv
+*.json
+*.xlsx
+*.parquet
+*.sql
+*.sqlite
+
+# -- Models & Heavy Binaries ---
+*.pkl
+*.joblib
+*.h5
+*.pb
+*.onnx
+*.weights
+
+# Distribution / packaging
+build/
+dist/
+ eggs/
+*.egg
+*.egg-info/
+pip-wheel-metadata/
+*.whl
+
+# --- IDEs ---
+.vscode/
+.code-workspace
+.idea/
+*.swp
+
+# --- Tests / Coverage ---
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+junit-*.xml
+
+# Misc
+*.log
+*.sqlite3
+*.db
