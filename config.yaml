@@ -1,0 +1,108 @@
+# HYPERION Configuration File
+
+# Environment Parameters
+environment:
+  num_agents: 5
+  max_steps: 500
+  arena_size: 10000.0  # meters
+  
+  # Target Configuration
+  target_speed: 1700.0  # m/s (Mach 5 at sea level)
+  
+  # Agent Capabilities
+  agent_max_speed: 300.0  # m/s
+  agent_max_accel: 50.0  # m/s^2
+  agent_max_turn_rate: 0.785  # rad/s (45 deg/s)
+  
+  # Detection and Communication
+  detection_range: 2000.0  # meters
+  intercept_range: 50.0  # meters
+  communication_range: 1500.0  # meters
+  
+  # Fuel System
+  initial_fuel: 1.0
+  fuel_consumption_rate: 0.001  # per second at full thrust
+  
+  # Physics
+  dt: 0.1  # timestep in seconds
+
+# Training Parameters
+training:
+  # RLlib Algorithm
+  algorithm: "PPO"  # or "MAPPO", "QMIX"
+  
+  # PPO Hyperparameters
+  ppo:
+    lr: 0.0003
+    gamma: 0.99
+    lambda_gae: 0.95
+    clip_param: 0.2
+    vf_clip_param: 10.0
+    entropy_coeff: 0.01
+    num_sgd_iter: 10
+    sgd_minibatch_size: 128
+    train_batch_size: 4000
+  
+  # Multi-Agent Settings
+  multi_agent:
+    policy_mapping: "shared"  # or "independent"
+    share_observations: false
+    
+  # Training Configuration
+  num_workers: 4
+  num_gpus: 1
+  num_envs_per_worker: 1
+  rollout_fragment_length: 200
+  
+  # Checkpointing
+  checkpoint_freq: 10
+  checkpoint_at_end: true
+  keep_checkpoints_num: 5
+
+# Evaluation Parameters
+evaluation:
+  episodes: 100
+  metrics:
+    - interception_rate
+    - mean_episode_reward
+    - mean_fuel_efficiency
+    - mean_time_to_intercept
+    - collision_rate
+  
+# Curriculum Learning
+curriculum:
+  enabled: true
+  stages:
+    - name: "basic"
+      target_speed: 500.0  # Subsonic
+      num_agents: 3
+      duration_episodes: 1000
+    
+    - name: "intermediate"
+      target_speed: 1000.0  # Supersonic
+      num_agents: 5
+      duration_episodes: 2000
+    
+    - name: "advanced"
+      target_speed: 1700.0  # Hypersonic
+      num_agents: 5
+      duration_episodes: 5000
+
+# Adversarial Testing
+adversarial:
+  enabled: false
+  evasive_maneuvers: true
+  jamming_probability: 0.1
+  communication_failure_rate: 0.05
+
+# Visualization
+visualization:
+  render_mode: null  # "human" or "rgb_array"
+  save_animations: false
+  animation_fps: 10
+  
+# Logging
+logging:
+  tensorboard: true
+  log_dir: "./logs"
+  log_level: "INFO"

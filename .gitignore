@@ -8,8 +8,9 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Virtual environments
+*.egg
+*.egg-info/
+.eggs/
 venv/
 env/
 .venv
@@ -23,6 +24,7 @@ set.cfg
 */.ipynb_checkpoints/*
 
 # -- Data -- 
+docs/
 data/raw/
 data/processed/
 *.csv
@@ -39,15 +41,16 @@ data/processed/
 *.pb
 *.onnx
 *.weights
+/scripts
+
 
 # Distribution / packaging
 build/
 dist/
- eggs/
-*.egg
-*.egg-info/
-pip-wheel-metadata/
-*.whl
+out/
+target/
+bin/
+obj/
 
 # --- IDEs ---
 .vscode/
@@ -64,7 +67,8 @@ htmlcov/
 .pytest_cache/
 nosetests.xml
 coverage.xml
-junit-*.xml
+.junit/
+
 
 # Misc
 *.log

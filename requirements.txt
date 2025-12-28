@@ -1,0 +1,45 @@
+# Core ML and RL
+torch>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Multi-Agent RL
+pettingzoo>=1.24.0
+gymnasium>=0.29.0
+supersuit>=3.9.0
+
+# Ray and RLlib for distributed training
+ray[rllib]>=2.7.0
+
+# Graph Neural Networks
+torch-geometric>=2.4.0
+networkx>=3.1
+
+# Visualization and Dashboard
+matplotlib>=3.7.0
+seaborn>=0.12.0
+streamlit>=1.28.0
+plotly>=5.17.0
+
+# API and Deployment
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.4.0
+
+# Utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+
+# Testing and Quality
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.10.0
+flake8>=6.1.0
+
+# Explainability
+shap>=0.43.0
+
+# Logging and Monitoring
+tensorboard>=2.14.0
+wandb>=0.15.0
