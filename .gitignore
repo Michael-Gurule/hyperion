@@ -74,3 +74,5 @@ coverage.xml
 *.log
 *.sqlite3
 *.db
+*.pt
+*.yaml

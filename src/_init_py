@@ -1,0 +1,3 @@
+"""HYPERION: AI-Driven Multi-Agent Swarm Intelligence for Hypersonic Defense"""
+
+__version__ = "0.1.0"

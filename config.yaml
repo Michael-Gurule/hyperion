@@ -90,19 +90,95 @@ curriculum:
 
 # Adversarial Testing
 adversarial:
-  enabled: false
+  enabled: true  # Enable for improved robustness
   evasive_maneuvers: true
+  evasion_probability: 0.3
+  jink_frequency: 0.5  # Hz
+  jink_magnitude: 500.0  # m/s^2
+  jamming_enabled: true
   jamming_probability: 0.1
+  jamming_duration: 2.0  # seconds
   communication_failure_rate: 0.05
+
+# Scaled Training (50-100+ agents)
+scaled_training:
+  # Environment
+  num_agents: 50
+  arena_size: 20000.0
+  max_observed_neighbors: 10
+
+  # Algorithm
+  algorithm: "MAPPO"  # "MAPPO", "PPO", "GNN_PPO"
+  use_gnn: true
+  gnn_layers: 3
+  gnn_hidden_dim: 128
+
+  # MAPPO settings
+  use_centralized_critic: true
+  share_actor: true
+
+  # Training
+  total_timesteps: 5000000
+  rollout_length: 2048
+  learning_rate: 0.0003
+  num_epochs: 10
+  minibatch_size: 256
+
+  # Curriculum
+  use_curriculum: true
+  curriculum_stages: 4
+  advancement_threshold: 0.7
+
+  # Checkpointing
+  checkpoint_freq: 50
+  checkpoint_dir: "./checkpoints/scaled"
+
+# Scaled Curriculum (for 50-100 agent training)
+scaled_curriculum:
+  stages:
+    - name: "basic"
+      num_agents: 10
+      target_speed: 500.0
+      adversarial_enabled: false
+      arena_size: 10000.0
+
+    - name: "intermediate"
+      num_agents: 25
+      target_speed: 1000.0
+      adversarial_enabled: false
+      arena_size: 15000.0
+
+    - name: "advanced"
+      num_agents: 50
+      target_speed: 1500.0
+      adversarial_enabled: true
+      arena_size: 20000.0
+
+    - name: "expert"
+      num_agents: 50
+      target_speed: 1700.0
+      adversarial_enabled: true
+      adversarial_probability: 0.5
+      arena_size: 20000.0
+
+# GNN Communication Settings
+gnn:
+  embed_dim: 64
+  hidden_dim: 128
+  num_layers: 3
+  heads: 4
+  dropout: 0.1
+  num_roles: 4  # scout, tracker, interceptor, support
 
 # Visualization
 visualization:
   render_mode: null  # "human" or "rgb_array"
   save_animations: false
   animation_fps: 10
-  
+
 # Logging
 logging:
   tensorboard: true
+  wandb: false  # Enable for experiment tracking
   log_dir: "./logs"
   log_level: "INFO"
