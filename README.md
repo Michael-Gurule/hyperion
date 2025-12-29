@@ -2,7 +2,7 @@
 <br>
 
 <p align="center">
-  <img src="hyperion/assets/logo-full.svg" alt="HYPERION">
+  <img src="https://github.com/user-attachments/assets/96906e00-9e64-4399-b194-072cf22ab0bd" alt="HYPERION">
 <p align="center">
   <strong>AI-Driven Multi-Agent Swarm Intelligence for Hypersonic Defense</strong><br>
 </p>  
@@ -13,7 +13,6 @@
 
 HYPERION is a sophisticated machine learning platform designed to simulate and optimize autonomous drone swarms for the detection, tracking, and interception of hypersonic threats in aerospace and defense scenarios. The system leverages Multi-Agent Reinforcement Learning (MARL) to enable decentralized coordination among UAVs in high-stakes, dynamic environments.
 
-![HYPERION Dashboard](docs/images/dashboard_preview.png)
 
 ## Key Features
 
@@ -284,20 +283,12 @@ Inspired by prior portfolio projects:
 - CONSTELLATION: Satellite fleet health management
 - MERIDIAN: Portfolio optimization system
 
-## Citation
-```bibtex
-@software{hyperion2025,
-  title={HYPERION: AI-Driven Multi-Agent Swarm Intelligence for Hypersonic Defense},
-  author={Gurule, Michael},
-  year={2025},
-  url={https://github.com/michael-gurule/hyperion}
-}
-```
+
 ## Contributing
 
 This is a portfolio project. For questions or collaboration:
 
-**Michael Gurule
+**Michael Gurule**
 Data Scientist | Machine Learning Engineer
 
 - [![Email Me](https://img.shields.io/badge/EMAIL-8A2BE2)](michaelgurule1164@gmail.com)
@@ -306,8 +297,9 @@ Data Scientist | Machine Learning Engineer
 
 ---
 
+
 <p align="center">
-  <img src="../assets/logo-icon.svg" alt="HYPERION" width="40">
+  <img src="https://github.com/user-attachments/assets/9ea594f2-b109-41e0-911a-a2c894c5ad00" alt="HYPERION" width="40">
   <br>
   <sub>Built by Michael Gurule | Data: (Public)</sub>
 </p>
