@@ -6,6 +6,7 @@ Supports 50-100+ agents with:
 - Adversarial target behavior with evasive maneuvers
 - Coordination-aware reward shaping
 - Communication failures and jamming simulation
+- Projectile/missile system with PN guidance
 """
 
 import functools
@@ -14,8 +15,10 @@ from typing import Dict, List, Tuple, Optional, Any
 from gymnasium import spaces
 from pettingzoo import ParallelEnv
 from pettingzoo.utils import wrappers
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+
+from .projectile_system import ProjectileManager, ProjectileConfig, ProjectileHit
 
 
 class TargetBehavior(Enum):
@@ -73,6 +76,15 @@ class RewardConfig:
     detection_bonus: float = 0.3
     new_detection_bonus: float = 1.0
 
+    # Projectile rewards
+    projectile_hit_bonus: float = 50.0
+    projectile_launch_cost: float = -0.5
+    good_firing_angle_bonus: float = 2.0
+
+    # Anti-trailing penalties
+    trailing_penalty: float = 0.5
+    intercept_geometry_bonus: float = 1.0
+
 
 class ScaledHypersonicSwarmEnv(ParallelEnv):
     """
@@ -89,16 +101,22 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         self,
         num_agents: int = 50,
         max_steps: int = 500,
-        arena_size: float = 20000.0,  # Larger arena for more agents
+        arena_size: float = 8000.0,  # 8000x8000 arena per requirements
         target_speed: float = 1700.0,
         agent_max_speed: float = 300.0,
         detection_range: float = 3000.0,  # Extended for large swarms
-        intercept_range: float = 50.0,
+        intercept_range: float = 100.0,  # Parameterized 50-200
         communication_range: float = 2000.0,  # Extended comm range
         max_observed_neighbors: int = 10,  # Attention over variable neighbors
         adversarial_config: Optional[AdversarialConfig] = None,
         reward_config: Optional[RewardConfig] = None,
+        projectile_config: Optional[ProjectileConfig] = None,
         render_mode: Optional[str] = None,
+        # Projectile system toggle
+        use_projectiles: bool = True,
+        # Initial spread configuration
+        initial_spread_min: float = 2000.0,
+        initial_spread_max: float = 4000.0,
     ):
         """
         Initialize scaled swarm environment.
@@ -106,16 +124,20 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         Args:
             num_agents: Number of UAV agents (50-100+)
             max_steps: Maximum timesteps
-            arena_size: Operational area size
+            arena_size: Operational area size (default 8000x8000)
             target_speed: Hypersonic target velocity
             agent_max_speed: Maximum UAV velocity
             detection_range: Sensor range
-            intercept_range: Interception threshold
+            intercept_range: Interception threshold (50-200)
             communication_range: Agent communication range
             max_observed_neighbors: Max neighbors in observation
             adversarial_config: Adversarial training settings
             reward_config: Reward shaping configuration
+            projectile_config: Projectile system configuration
             render_mode: Visualization mode
+            use_projectiles: Enable projectile system
+            initial_spread_min: Minimum initial drone spread radius
+            initial_spread_max: Maximum initial drone spread radius
         """
         super().__init__()
 
@@ -129,10 +151,21 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         self.communication_range = communication_range
         self.max_observed_neighbors = max_observed_neighbors
         self.render_mode = render_mode
+        self.use_projectiles = use_projectiles
+        self.initial_spread_min = initial_spread_min
+        self.initial_spread_max = initial_spread_max
 
         # Configurations
         self.adversarial = adversarial_config or AdversarialConfig()
         self.rewards = reward_config or RewardConfig()
+
+        # Projectile system
+        if use_projectiles:
+            self.projectile_config = projectile_config or ProjectileConfig()
+            self.projectile_manager = ProjectileManager(self.projectile_config)
+        else:
+            self.projectile_config = None
+            self.projectile_manager = None
 
         # Time step
         self.dt = 0.1
@@ -160,6 +193,10 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         # Detection history for novelty bonus
         self.detected_by = set()
 
+        # Projectile hit tracking for rewards
+        self.projectile_hits_this_step = []
+        self.agents_who_fired_this_step = set()
+
         # Define spaces
         self._setup_spaces()
 
@@ -172,17 +209,20 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         - Target info: 6 dims (detected, rel_pos_x, rel_pos_y, vel_x, vel_y, confidence)
         - Neighbor embeddings: max_neighbors * 6 dims (rel_pos, vel, role, active)
         - Global context: 4 dims (num_active, mean_fuel, swarm_spread, time_remaining)
+        - Projectile info: 4 dims (remaining_projectiles, cooldown, nearest_proj_x, nearest_proj_y)
         """
         self_dim = 5
         target_dim = 6
         neighbor_dim = 6
         global_dim = 4
+        projectile_dim = 4 if self.use_projectiles else 0
 
         total_obs_dim = (
             self_dim +
             target_dim +
             self.max_observed_neighbors * neighbor_dim +
-            global_dim
+            global_dim +
+            projectile_dim
         )
 
         self.observation_spaces = {
@@ -192,14 +232,25 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
             for agent in self.possible_agents
         }
 
-        self.action_spaces = {
-            agent: spaces.Box(
-                low=np.array([0.0, -1.0]),
-                high=np.array([1.0, 1.0]),
-                dtype=np.float32,
-            )
-            for agent in self.possible_agents
-        }
+        # Action space: [thrust, heading, fire] if projectiles enabled
+        if self.use_projectiles:
+            self.action_spaces = {
+                agent: spaces.Box(
+                    low=np.array([0.0, -1.0, 0.0]),
+                    high=np.array([1.0, 1.0, 1.0]),
+                    dtype=np.float32,
+                )
+                for agent in self.possible_agents
+            }
+        else:
+            self.action_spaces = {
+                agent: spaces.Box(
+                    low=np.array([0.0, -1.0]),
+                    high=np.array([1.0, 1.0]),
+                    dtype=np.float32,
+                )
+                for agent in self.possible_agents
+            }
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
@@ -226,6 +277,12 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         self.current_step = 0
         self.detected_by = set()
         self.jamming_active = False
+        self.projectile_hits_this_step = []
+        self.agents_who_fired_this_step = set()
+
+        # Reset projectile system
+        if self.projectile_manager is not None:
+            self.projectile_manager.reset()
 
         # Initialize agents in formation patterns
         self.agent_states = {}
@@ -252,21 +309,23 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         return observations, infos
 
     def _initialize_agents_formation(self):
-        """Initialize agents in strategic formation."""
+        """Initialize agents in strategic formation with configurable spread."""
         num_agents = self._num_agents
 
-        # Create multiple rings at different radii
+        # Create multiple rings within the initial spread range
         num_rings = 3
         agents_per_ring = num_agents // num_rings
 
+        # Use configurable spread range (2000-4000 default)
+        spread_range = self.initial_spread_max - self.initial_spread_min
         ring_radii = [
-            self.arena_size * 0.2,  # Inner ring (interceptors)
-            self.arena_size * 0.35,  # Middle ring (trackers)
-            self.arena_size * 0.5,  # Outer ring (scouts)
+            self.initial_spread_min + spread_range * 0.1,  # Inner ring (interceptors)
+            self.initial_spread_min + spread_range * 0.5,  # Middle ring (trackers)
+            self.initial_spread_min + spread_range * 0.9,  # Outer ring (scouts)
         ]
 
         agent_idx = 0
-        for ring_idx, radius in enumerate(ring_radii):
+        for ring_idx, base_radius in enumerate(ring_radii):
             agents_in_ring = agents_per_ring if ring_idx < num_rings - 1 else num_agents - agent_idx
 
             for i in range(agents_in_ring):
@@ -276,13 +335,17 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
                 angle = 2 * np.pi * i / agents_in_ring
                 # Add small random perturbation
                 angle += np.random.normal(0, 0.1)
-                radius_perturbed = radius + np.random.normal(0, radius * 0.1)
+                # Random radius within ring band
+                radius = np.random.uniform(
+                    base_radius * 0.9,
+                    base_radius * 1.1
+                )
 
                 agent = self.possible_agents[agent_idx]
                 self.agent_states[agent] = {
                     "position": np.array([
-                        radius_perturbed * np.cos(angle),
-                        radius_perturbed * np.sin(angle),
+                        radius * np.cos(angle),
+                        radius * np.sin(angle),
                     ]),
                     "velocity": np.array([0.0, 0.0]),
                     "heading": angle + np.pi,  # Face inward
@@ -290,6 +353,7 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
                     "active": True,
                     "role": AgentRole(ring_idx % 4),
                     "detection_count": 0,
+                    "projectiles_launched": 0,  # Track for rewards
                 }
                 agent_idx += 1
 
@@ -334,6 +398,11 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
     ]:
         """Execute environment step."""
         self.current_step += 1
+        current_time = self.current_step * self.dt
+
+        # Reset per-step tracking
+        self.projectile_hits_this_step = []
+        self.agents_who_fired_this_step = set()
 
         # Update jamming state
         self._update_jamming()
@@ -341,8 +410,23 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         # Update agents
         for agent in self.agents:
             if self.agent_states[agent]["active"]:
-                action = actions.get(agent, np.array([0.0, 0.0]))
+                default_action = np.array([0.0, 0.0, 0.0]) if self.use_projectiles else np.array([0.0, 0.0])
+                action = actions.get(agent, default_action)
                 self._update_agent(agent, action)
+
+                # Handle projectile firing
+                if self.use_projectiles and len(action) >= 3 and action[2] > 0.5:
+                    self._try_fire_projectile(agent, current_time)
+
+        # Update projectiles
+        if self.projectile_manager is not None and self.target_state["active"]:
+            hits = self.projectile_manager.update(
+                dt=self.dt,
+                current_time=current_time,
+                target_position=self.target_state["position"],
+                target_velocity=self.target_state["velocity"],
+            )
+            self.projectile_hits_this_step = hits
 
         # Update target with evasive behavior
         self._update_target()
@@ -350,8 +434,11 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         # Check collisions between agents
         self._check_collisions()
 
-        # Calculate outcomes
+        # Calculate outcomes - projectile hits count as interception
         intercepted = self._check_interception()
+        if not intercepted and self.projectile_hits_this_step:
+            intercepted = True
+            self.target_state["active"] = False
         target_escaped = self._check_target_escape()
 
         # Generate outputs
@@ -376,12 +463,43 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
                 "fuel_remaining": self.agent_states[agent]["fuel"],
                 "role": self.agent_states[agent]["role"],
                 "jamming_active": self.jamming_active,
+                "projectile_hits": len(self.projectile_hits_this_step),
+                "fired_this_step": agent in self.agents_who_fired_this_step,
             }
 
         if intercepted or target_escaped:
             self.agents = []
 
         return observations, rewards, terminations, truncations, infos
+
+    def _try_fire_projectile(self, agent: str, current_time: float):
+        """Attempt to fire a projectile for an agent."""
+        if self.projectile_manager is None:
+            return
+
+        state = self.agent_states[agent]
+        if not state["active"]:
+            return
+
+        # Only fire if target is detected
+        distance_to_target = np.linalg.norm(
+            state["position"] - self.target_state["position"]
+        )
+        if distance_to_target > self.detection_range:
+            return
+
+        # Try to launch
+        projectile = self.projectile_manager.launch_projectile(
+            agent_id=agent,
+            agent_position=state["position"],
+            target_position=self.target_state["position"],
+            target_velocity=self.target_state["velocity"],
+            current_time=current_time,
+        )
+
+        if projectile is not None:
+            self.agents_who_fired_this_step.add(agent)
+            state["projectiles_launched"] = state.get("projectiles_launched", 0) + 1
 
     def _update_jamming(self):
         """Update jamming simulation."""
@@ -600,6 +718,17 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         obs.append(min(1.0, swarm_spread))
         obs.append(time_remaining)
 
+        # Projectile observations (4 dims) if enabled
+        if self.use_projectiles and self.projectile_manager is not None:
+            current_time = self.current_step * self.dt
+            projectile_obs = self.projectile_manager.get_observation_for_agent(
+                agent_id=agent,
+                current_time=current_time,
+                target_position=self.target_state["position"],
+                normalize_distance=self.detection_range,
+            )
+            obs.extend(projectile_obs)
+
         return np.array(obs, dtype=np.float32)
 
     def _get_neighbors_with_attention(
@@ -678,22 +807,28 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
         intercepted: bool,
         escaped: bool,
     ) -> float:
-        """Calculate shaped reward for coordination."""
+        """Calculate shaped reward for coordination with projectile and anti-trailing rewards."""
         reward = 0.0
         state = self.agent_states[agent]
+        agent_vel = state["velocity"]
+        agent_pos = state["position"]
+        target_pos = self.target_state["position"]
+        target_vel = self.target_state["velocity"]
 
         # Terminal rewards
         if intercepted:
             reward += self.rewards.intercept_reward
+            # Bonus for agent who made the hit
+            for hit in self.projectile_hits_this_step:
+                if hit.owner_agent == agent:
+                    reward += self.rewards.projectile_hit_bonus
             return reward
         elif escaped:
             reward += self.rewards.escape_penalty
             return reward
 
         # Distance-based reward
-        distance_to_target = np.linalg.norm(
-            state["position"] - self.target_state["position"]
-        )
+        distance_to_target = np.linalg.norm(agent_pos - target_pos)
         prev_distance = state.get("_prev_distance", distance_to_target)
         state["_prev_distance"] = distance_to_target
 
@@ -714,25 +849,75 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
                 reward += self.rewards.new_detection_bonus
                 self.detected_by.add(agent)
 
+        # === ANTI-TRAILING PENALTIES ===
+        agent_speed = np.linalg.norm(agent_vel)
+        target_speed = np.linalg.norm(target_vel)
+
+        if agent_speed > 1e-6 and target_speed > 1e-6:
+            agent_dir = agent_vel / agent_speed
+            target_dir = target_vel / target_speed
+
+            # Penalize moving same direction as target (trailing)
+            trailing_score = np.dot(agent_dir, target_dir)
+
+            if trailing_score > 0.7:  # Moving same direction
+                # Penalize more if slower than target
+                speed_ratio = agent_speed / target_speed
+                if speed_ratio < 0.8:
+                    reward -= self.rewards.trailing_penalty * trailing_score
+
+        # === INTERCEPT GEOMETRY BONUS ===
+        # Reward positioning that creates good intercept angles
+        to_target = target_pos - agent_pos
+        to_target_dist = np.linalg.norm(to_target)
+
+        if to_target_dist > 1e-6 and target_speed > 1e-6:
+            to_target_unit = to_target / to_target_dist
+            # Angle between approach direction and target's reverse direction
+            approach_angle = np.arccos(np.clip(
+                np.dot(to_target_unit, -target_dir), -1, 1
+            ))
+            # Optimal intercept is perpendicular or head-on (>45 degrees from behind)
+            if approach_angle > np.pi / 4:  # > 45 degrees from tail-chase
+                reward += self.rewards.intercept_geometry_bonus * (approach_angle / np.pi)
+
+        # === PROJECTILE REWARDS ===
+        if self.use_projectiles:
+            # Penalty for firing (prevents spam)
+            if agent in self.agents_who_fired_this_step:
+                reward += self.rewards.projectile_launch_cost
+
+            # Bonus for good firing angle (perpendicular or head-on approach)
+            if agent in self.agents_who_fired_this_step and to_target_dist > 1e-6:
+                if target_speed > 1e-6:
+                    firing_angle = np.arccos(np.clip(
+                        np.dot(to_target / to_target_dist, -target_dir), -1, 1
+                    ))
+                    # Better angle = more bonus (head-on is best)
+                    if firing_angle > np.pi / 3:  # > 60 degrees from behind
+                        reward += self.rewards.good_firing_angle_bonus * (firing_angle / np.pi)
+
         # Coordination rewards
         neighbors = self._get_neighbors_with_attention(agent)
 
         if len(neighbors) > 0:
             # Formation maintenance
-            avg_neighbor_distance = np.mean([
+            neighbor_distances = [
                 np.linalg.norm(
                     state["position"] - self.agent_states[other]["position"]
                 )
                 for other in self.agents
                 if other != agent and self.agent_states[other]["active"]
                 and np.linalg.norm(state["position"] - self.agent_states[other]["position"]) < self.communication_range
-            ][:5])  # Top 5 closest
+            ][:5]  # Top 5 closest
 
-            optimal_spacing = self.communication_range * 0.3
-            spacing_error = abs(avg_neighbor_distance - optimal_spacing) / optimal_spacing
+            if neighbor_distances:
+                avg_neighbor_distance = np.mean(neighbor_distances)
+                optimal_spacing = self.communication_range * 0.3
+                spacing_error = abs(avg_neighbor_distance - optimal_spacing) / optimal_spacing
 
-            if spacing_error < 0.5:
-                reward += self.rewards.formation_bonus * (1.0 - spacing_error)
+                if spacing_error < 0.5:
+                    reward += self.rewards.formation_bonus * (1.0 - spacing_error)
 
             # Role-based coordination
             my_role = state["role"]

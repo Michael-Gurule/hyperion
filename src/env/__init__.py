@@ -10,6 +10,14 @@ from .scaled_environment import (
     TargetBehavior,
     AgentRole,
 )
+from .projectile_system import (
+    ProjectileManager,
+    ProjectileConfig,
+    Projectile,
+    ProjectileHit,
+    GuidanceType,
+    ProportionalNavigationGuidance,
+)
 
 __all__ = [
     "HypersonicSwarmEnv",
@@ -21,4 +29,10 @@ __all__ = [
     "RewardConfig",
     "TargetBehavior",
     "AgentRole",
+    "ProjectileManager",
+    "ProjectileConfig",
+    "Projectile",
+    "ProjectileHit",
+    "GuidanceType",
+    "ProportionalNavigationGuidance",
 ]
