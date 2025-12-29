@@ -15,6 +15,14 @@ from .adaptive_sensor_fusion import (
     SensorMeasurement,
     SensorType,
 )
+from .hierarchical_policy import (
+    RoleType,
+    HierarchicalPolicyConfig,
+    RolePolicy,
+    RoleAssigner,
+    RoleBasedOptionCritic,
+    HierarchicalMAPPO,
+)
 
 __all__ = [
     # Detection models
@@ -32,4 +40,11 @@ __all__ = [
     "MultiHypothesisTracker",
     "SensorMeasurement",
     "SensorType",
+    # Hierarchical policies
+    "RoleType",
+    "HierarchicalPolicyConfig",
+    "RolePolicy",
+    "RoleAssigner",
+    "RoleBasedOptionCritic",
+    "HierarchicalMAPPO",
 ]
