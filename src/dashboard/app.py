@@ -1,6 +1,7 @@
 """
-HYPERION Interactive Dashboard
-Streamlit application for visualizing swarm behavior and evaluation metrics.
+HYPERION Enhanced Dashboard
+Comprehensive visualization for scaled swarm training and evaluation.
+Supports 50+ agents, curriculum learning, hierarchical policies, and projectile systems.
 """
 
 import streamlit as st
@@ -8,495 +9,698 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import json
+import yaml
+import torch
 from pathlib import Path
+from datetime import datetime
 import sys
 import os
+from typing import Dict, List, Optional, Any
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Add src to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from src.env.hypersonic_swarm_env import HypersonicSwarmEnv
-from src.evaluation.metrics import evaluate_policy, EvaluationMetrics
-
-
 # Page configuration
 st.set_page_config(
     page_title="HYPERION Dashboard",
-    page_icon="🚀",
+    page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Constants
+CURRICULUM_STAGES = {
+    0: {"name": "Stage 1: Slow Ballistic", "speed": "1.5x", "evasion": "None"},
+    1: {"name": "Stage 2: Medium Weaving", "speed": "2.0x", "evasion": "Basic"},
+    2: {"name": "Stage 3: Fast Jinking", "speed": "3.0x", "evasion": "Medium"},
+    3: {"name": "Stage 4: Hypersonic Evasive", "speed": "4.0x", "evasion": "Full"},
+}
+
+
+def load_training_history(path: Path) -> Optional[Dict[str, List]]:
+    """Load training history from YAML file."""
+    if not path.exists():
+        return None
+    with open(path, 'r') as f:
+        return yaml.safe_load(f)
+
+
+def load_checkpoint_info(path: Path) -> Optional[Dict]:
+    """Load checkpoint and extract metadata."""
+    if not path.exists():
+        return None
+    try:
+        checkpoint = torch.load(path, map_location='cpu', weights_only=False)
+        info = {
+            "file": path.name,
+            "size_mb": path.stat().st_size / (1024 * 1024),
+            "modified": datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        # Extract training info if available
+        if isinstance(checkpoint, dict):
+            info["keys"] = list(checkpoint.keys())
+            if "episode" in checkpoint:
+                info["episode"] = checkpoint["episode"]
+            if "curriculum_stage" in checkpoint:
+                info["curriculum_stage"] = checkpoint["curriculum_stage"]
+            if "success_rate" in checkpoint:
+                info["success_rate"] = checkpoint["success_rate"]
+        return info
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def find_checkpoints() -> Dict[str, List[Path]]:
+    """Find all checkpoint directories."""
+    checkpoints_dir = Path("checkpoints")
+    result = {}
+    if checkpoints_dir.exists():
+        for subdir in checkpoints_dir.iterdir():
+            if subdir.is_dir():
+                pt_files = list(subdir.glob("*.pt"))
+                yaml_files = list(subdir.glob("*.yaml"))
+                result[subdir.name] = {
+                    "models": pt_files,
+                    "history": yaml_files[0] if yaml_files else None
+                }
+    return result
 
 
 def main():
     """Main dashboard application."""
 
     # Header
-    st.title("🚀 HYPERION: Hypersonic Defense Swarm Intelligence")
+    st.title("🎯 HYPERION: Enhanced Swarm Intelligence Dashboard")
+    st.markdown("*Hypersonic Defense Operations - Training & Evaluation Platform*")
     st.markdown("---")
 
     # Sidebar
     with st.sidebar:
-        st.header("Configuration")
-
-        # Environment settings
-        st.subheader("Environment")
-        num_agents = st.slider("Number of Agents", 1, 10, 5)
-        target_speed = st.slider("Target Speed (m/s)", 500, 2000, 1700, step=100)
-        max_steps = st.slider("Max Steps", 100, 1000, 500, step=50)
-
-        st.markdown("---")
-
-        # Evaluation settings
-        st.subheader("Evaluation")
-        num_episodes = st.slider("Episodes to Evaluate", 1, 100, 10)
-
-        st.markdown("---")
-
-        # Action buttons
-        run_simulation = st.button("🎮 Run Simulation", use_container_width=True)
-        run_evaluation = st.button("📊 Run Evaluation", use_container_width=True)
-
-    # Main content tabs
-    tab1, tab2, tab3, tab4 = st.tabs(
-        [
-            "🎯 Live Simulation",
-            "📈 Performance Metrics",
-            "🔍 Episode Analysis",
-            "ℹ️ System Info",
-        ]
-    )
-
-    # Tab 1: Live Simulation
-    with tab1:
-        st.header("Live Swarm Simulation")
-
-        if run_simulation:
-            run_live_simulation(num_agents, target_speed, max_steps)
-        else:
-            st.info("Click 'Run Simulation' in the sidebar to start")
-
-    # Tab 2: Performance Metrics
-    with tab2:
-        st.header("Performance Metrics")
-
-        if run_evaluation:
-            run_policy_evaluation(num_agents, target_speed, max_steps, num_episodes)
-        else:
-            st.info("Click 'Run Evaluation' in the sidebar to evaluate policy")
-
-    # Tab 3: Episode Analysis
-    with tab3:
-        st.header("Episode Analysis")
-        display_saved_results()
-
-    # Tab 4: System Info
-    with tab4:
-        st.header("System Information")
-        display_system_info(num_agents, target_speed, max_steps)
-
-
-def run_live_simulation(num_agents, target_speed, max_steps):
-    """Run and visualize a single simulation episode."""
-
-    st.subheader("Simulation in Progress...")
-
-    # Create environment
-    env = HypersonicSwarmEnv(
-        num_agents=num_agents,
-        target_speed=target_speed,
-        max_steps=max_steps,
-        render_mode="rgb_array",
-    )
-
-    # Progress tracking
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    # Metrics placeholders
-    col1, col2, col3, col4 = st.columns(4)
-    metric_step = col1.empty()
-    metric_reward = col2.empty()
-    metric_distance = col3.empty()
-    metric_fuel = col4.empty()
-
-    # Visualization placeholder
-    viz_placeholder = st.empty()
-
-    # Run episode
-    observations, _ = env.reset(seed=42)
-    done = False
-    step = 0
-    total_reward = 0
-
-    trajectory_data = {"steps": [], "rewards": [], "min_distances": [], "avg_fuel": []}
-
-    while not done and step < max_steps:
-        # Simple pursuit policy
-        actions = {}
-        for agent in env.agents:
-            obs = observations[agent]
-            target_detected = obs[5] > 0.5
-
-            if target_detected:
-                target_rel_x = obs[6]
-                target_rel_y = obs[7]
-                desired_angle = np.arctan2(target_rel_y, target_rel_x)
-                current_heading = env.agent_states[agent]["heading"]
-                angle_diff = desired_angle - current_heading
-                angle_diff = (angle_diff + np.pi) % (2 * np.pi) - np.pi
-                heading_change = np.clip(angle_diff / (np.pi / 4), -1.0, 1.0)
-                actions[agent] = np.array([1.0, heading_change])
-            else:
-                actions[agent] = np.array([0.5, 0.0])
-
-        observations, rewards, terminations, truncations, infos = env.step(actions)
-
-        # Update metrics
-        step += 1
-        total_reward += sum(rewards.values())
-
-        # Calculate distance to target
-        target_pos = env.target_state["position"]
-        min_distance = min(
+        st.header("⚙️ Navigation")
+        page = st.radio(
+            "Select View",
             [
-                np.linalg.norm(state["position"] - target_pos)
-                for state in env.agent_states.values()
+                "📊 Training Progress",
+                "🔬 Checkpoint Analysis",
+                "🎮 Live Simulation",
+                "📈 Curriculum Metrics",
+                "🤖 Role Distribution",
+                "ℹ️ System Info",
             ]
         )
 
-        # Calculate average fuel
-        avg_fuel = np.mean([state["fuel"] for state in env.agent_states.values()])
+        st.markdown("---")
+        st.header("📁 Data Source")
 
-        # Store trajectory data
-        trajectory_data["steps"].append(step)
-        trajectory_data["rewards"].append(total_reward)
-        trajectory_data["min_distances"].append(min_distance)
-        trajectory_data["avg_fuel"].append(avg_fuel)
-
-        # Update display every 10 steps
-        if step % 10 == 0 or step < 10:
-            progress_bar.progress(min(step / max_steps, 1.0))
-            status_text.text(f"Step {step}/{max_steps}")
-
-            metric_step.metric("Step", step)
-            metric_reward.metric("Total Reward", f"{total_reward:.1f}")
-            metric_distance.metric("Min Distance", f"{min_distance:.0f}m")
-            metric_fuel.metric("Avg Fuel", f"{avg_fuel * 100:.1f}%")
-
-            # Render visualization
-            if env.visualizer:
-                fig = env.visualizer.render_frame(
-                    env.agent_states,
-                    env.target_state,
-                    step,
-                    show_detection=True,
-                    show_communication=True,
-                )
-                viz_placeholder.pyplot(fig)
-                plt.close(fig)
-
-        done = all(terminations.values()) or all(truncations.values())
-
-    # Final status
-    progress_bar.progress(1.0)
-
-    if infos.get("agent_0", {}).get("intercepted", False):
-        st.success(f"✅ Target Intercepted at step {step}!")
-    elif infos.get("agent_0", {}).get("target_escaped", False):
-        st.error("❌ Target Escaped!")
-    else:
-        st.warning("⏱️ Episode Timeout")
-
-    # Plot trajectory metrics
-    st.subheader("Episode Trajectory")
-
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-
-    # Reward over time
-    axes[0, 0].plot(
-        trajectory_data["steps"], trajectory_data["rewards"], "b-", linewidth=2
-    )
-    axes[0, 0].set_xlabel("Step")
-    axes[0, 0].set_ylabel("Cumulative Reward")
-    axes[0, 0].set_title("Reward Over Time")
-    axes[0, 0].grid(True, alpha=0.3)
-
-    # Distance to target
-    axes[0, 1].plot(
-        trajectory_data["steps"], trajectory_data["min_distances"], "r-", linewidth=2
-    )
-    axes[0, 1].set_xlabel("Step")
-    axes[0, 1].set_ylabel("Distance (m)")
-    axes[0, 1].set_title("Minimum Distance to Target")
-    axes[0, 1].grid(True, alpha=0.3)
-
-    # Fuel levels
-    axes[1, 0].plot(
-        trajectory_data["steps"], trajectory_data["avg_fuel"], "g-", linewidth=2
-    )
-    axes[1, 0].set_xlabel("Step")
-    axes[1, 0].set_ylabel("Fuel Remaining")
-    axes[1, 0].set_title("Average Fuel Level")
-    axes[1, 0].grid(True, alpha=0.3)
-
-    # Episode summary
-    axes[1, 1].axis("off")
-    summary_text = f"""
-    Episode Summary
-    
-    Steps: {step}
-    Total Reward: {total_reward:.2f}
-    Final Distance: {min_distance:.1f}m
-    Final Fuel: {avg_fuel * 100:.1f}%
-    
-    Status: {"Intercepted" if infos.get("agent_0", {}).get("intercepted", False) else "Failed"}
-    """
-    axes[1, 1].text(0.1, 0.5, summary_text, fontsize=12, verticalalignment="center")
-
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
-
-
-def run_policy_evaluation(num_agents, target_speed, max_steps, num_episodes):
-    """Run policy evaluation over multiple episodes."""
-
-    st.subheader(f"Evaluating Random Policy over {num_episodes} Episodes")
-
-    # Create environment
-    env = HypersonicSwarmEnv(
-        num_agents=num_agents, target_speed=target_speed, max_steps=max_steps
-    )
-
-    # Progress tracking
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    # Run evaluation
-    metrics = EvaluationMetrics()
-
-    for episode in range(num_episodes):
-        metrics.start_episode()
-        observations, _ = env.reset()
-        done = False
-
-        while not done:
-            # Random policy
-            actions = {agent: env.action_space(agent).sample() for agent in env.agents}
-
-            observations, rewards, terminations, truncations, infos = env.step(actions)
-
-            metrics.update_step(
-                rewards=rewards,
-                infos=infos,
-                agent_states=env.agent_states,
-                target_state=env.target_state,
+        # Find available checkpoints
+        checkpoints = find_checkpoints()
+        if checkpoints:
+            selected_run = st.selectbox(
+                "Select Training Run",
+                list(checkpoints.keys())
             )
+        else:
+            selected_run = None
+            st.warning("No checkpoints found")
 
-            done = all(terminations.values()) or all(truncations.values())
+    # Main content based on selected page
+    if page == "📊 Training Progress":
+        render_training_progress(checkpoints, selected_run)
+    elif page == "🔬 Checkpoint Analysis":
+        render_checkpoint_analysis(checkpoints, selected_run)
+    elif page == "🎮 Live Simulation":
+        render_live_simulation()
+    elif page == "📈 Curriculum Metrics":
+        render_curriculum_metrics(checkpoints, selected_run)
+    elif page == "🤖 Role Distribution":
+        render_role_distribution(checkpoints, selected_run)
+    elif page == "ℹ️ System Info":
+        render_system_info()
 
-        metrics.end_episode()
 
-        # Update progress
-        progress_bar.progress((episode + 1) / num_episodes)
-        status_text.text(f"Episode {episode + 1}/{num_episodes}")
+def render_training_progress(checkpoints: Dict, selected_run: Optional[str]):
+    """Render training progress visualization."""
+    st.header("📊 Training Progress")
 
-    # Get summary statistics
-    summary = metrics.get_summary_statistics()
+    if not selected_run or not checkpoints.get(selected_run, {}).get("history"):
+        st.warning("No training history available. Select a run with training data.")
+        return
 
-    # Display metrics
-    st.success("Evaluation Complete!")
+    history_path = checkpoints[selected_run]["history"]
+    history = load_training_history(history_path)
 
-    # Key metrics
+    if not history:
+        st.error("Failed to load training history")
+        return
+
+    # Summary metrics
+    st.subheader("Training Summary")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Interception Rate", f"{summary['interception_rate'] * 100:.1f}%")
-    col2.metric("Avg Episode Reward", f"{summary['mean_episode_reward']:.1f}")
-    col3.metric("Avg Episode Length", f"{summary['mean_episode_length']:.0f}")
-    col4.metric("Fuel Efficiency", f"{summary['mean_fuel_efficiency'] * 100:.1f}%")
 
-    # Detailed statistics
-    st.subheader("Detailed Statistics")
+    num_episodes = len(history.get("episode_reward", []))
+    success_rate = np.mean(history.get("success", [])) * 100 if history.get("success") else 0
+    avg_reward = np.mean(history.get("episode_reward", [])) if history.get("episode_reward") else 0
+    final_stage = int(history.get("curriculum_stage", [0])[-1]) if history.get("curriculum_stage") else 0
 
-    stats_df = pd.DataFrame(
-        {
-            "Metric": [
-                "Interception Rate",
-                "Escape Rate",
-                "Mean Episode Length",
-                "Mean Episode Reward",
-                "Mean Fuel Efficiency",
-                "Mean Min Distance",
-            ],
-            "Value": [
-                f"{summary['interception_rate'] * 100:.1f}%",
-                f"{summary['escape_rate'] * 100:.1f}%",
-                f"{summary['mean_episode_length']:.1f} steps",
-                f"{summary['mean_episode_reward']:.2f}",
-                f"{summary['mean_fuel_efficiency'] * 100:.1f}%",
-                f"{summary['mean_min_distance']:.1f}m",
-            ],
-        }
-    )
+    col1.metric("Total Episodes", num_episodes)
+    col2.metric("Success Rate", f"{success_rate:.1f}%")
+    col3.metric("Avg Reward", f"{avg_reward:.1f}")
+    col4.metric("Current Stage", f"Stage {final_stage + 1}")
 
-    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+    st.markdown("---")
 
-    # Save results
-    save_path = "outputs/dashboard_evaluation.json"
-    metrics.save_results(save_path)
-    st.info(f"Results saved to {save_path}")
+    # Interactive plots with Plotly
+    st.subheader("Training Curves")
 
-    # Visualizations
-    st.subheader("Performance Distributions")
+    # Create episode index
+    episodes = list(range(1, num_episodes + 1))
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    # Tab layout for different metrics
+    tab1, tab2, tab3, tab4 = st.tabs(["Rewards", "Success Rate", "Losses", "Exploration"])
 
-    # Episode rewards distribution
-    episode_rewards = [ep.total_reward for ep in metrics.episodes]
-    axes[0].hist(episode_rewards, bins=20, edgecolor="black", alpha=0.7)
-    axes[0].set_xlabel("Episode Reward")
-    axes[0].set_ylabel("Frequency")
-    axes[0].set_title("Episode Reward Distribution")
-    axes[0].grid(True, alpha=0.3)
+    with tab1:
+        # Episode Rewards
+        fig = make_subplots(rows=2, cols=1, subplot_titles=("Episode Reward", "Intrinsic Reward"))
 
-    # Episode length distribution
-    episode_lengths = [ep.steps for ep in metrics.episodes]
-    axes[1].hist(episode_lengths, bins=20, edgecolor="black", alpha=0.7, color="green")
-    axes[1].set_xlabel("Episode Length")
-    axes[1].set_ylabel("Frequency")
-    axes[1].set_title("Episode Length Distribution")
-    axes[1].grid(True, alpha=0.3)
+        # Episode reward with smoothing
+        rewards = history.get("episode_reward", [])
+        smoothed_rewards = pd.Series(rewards).rolling(window=10, min_periods=1).mean()
 
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
-
-
-def display_saved_results():
-    """Display previously saved evaluation results."""
-
-    results_dir = Path("outputs")
-
-    if not results_dir.exists():
-        st.warning("No saved results found. Run an evaluation first.")
-        return
-
-    # Find JSON files
-    json_files = list(results_dir.glob("*.json"))
-
-    if not json_files:
-        st.warning("No saved results found. Run an evaluation first.")
-        return
-
-    # File selector
-    selected_file = st.selectbox(
-        "Select Results File", json_files, format_func=lambda x: x.name
-    )
-
-    # Load results
-    with open(selected_file, "r") as f:
-        results = json.load(f)
-
-    summary = results.get("summary", {})
-    episodes = results.get("episodes", [])
-
-    # Display summary
-    st.subheader("Summary Statistics")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Episodes", summary.get("num_episodes", 0))
-    col2.metric(
-        "Interception Rate", f"{summary.get('interception_rate', 0) * 100:.1f}%"
-    )
-    col3.metric("Avg Reward", f"{summary.get('mean_episode_reward', 0):.1f}")
-
-    # Episode data table
-    st.subheader("Episode Details")
-
-    if episodes:
-        episodes_df = pd.DataFrame(episodes)
-        st.dataframe(episodes_df, use_container_width=True)
-
-        # Download button
-        csv = episodes_df.to_csv(index=False)
-        st.download_button(
-            label="Download Episode Data (CSV)",
-            data=csv,
-            file_name=f"{selected_file.stem}_episodes.csv",
-            mime="text/csv",
+        fig.add_trace(
+            go.Scatter(x=episodes, y=rewards, mode='lines', name='Raw', opacity=0.3, line=dict(color='blue')),
+            row=1, col=1
+        )
+        fig.add_trace(
+            go.Scatter(x=episodes, y=smoothed_rewards, mode='lines', name='Smoothed (10)', line=dict(color='blue', width=2)),
+            row=1, col=1
         )
 
+        # Intrinsic reward
+        intrinsic = history.get("intrinsic_reward", [])
+        if intrinsic:
+            smoothed_intrinsic = pd.Series(intrinsic).rolling(window=10, min_periods=1).mean()
+            fig.add_trace(
+                go.Scatter(x=episodes[:len(intrinsic)], y=intrinsic, mode='lines', name='Raw', opacity=0.3, line=dict(color='orange')),
+                row=2, col=1
+            )
+            fig.add_trace(
+                go.Scatter(x=episodes[:len(intrinsic)], y=smoothed_intrinsic, mode='lines', name='Smoothed', line=dict(color='orange', width=2)),
+                row=2, col=1
+            )
 
-def display_system_info(num_agents, target_speed, max_steps):
-    """Display system and configuration information."""
+        fig.update_layout(height=600, showlegend=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Environment Configuration")
+    with tab2:
+        # Success rate with curriculum stages
+        success = history.get("success", [])
+        curriculum = history.get("curriculum_stage", [])
 
-    config_data = {
-        "Parameter": [
-            "Number of Agents",
-            "Target Speed",
-            "Max Steps",
-            "Arena Size",
-            "Detection Range",
-            "Communication Range",
-            "Intercept Range",
-        ],
-        "Value": [
-            num_agents,
-            f"{target_speed} m/s",
-            max_steps,
-            "10,000 m",
-            "2,000 m",
-            "1,500 m",
-            "50 m",
-        ],
-    }
+        fig = go.Figure()
 
-    config_df = pd.DataFrame(config_data)
-    st.dataframe(config_df, use_container_width=True, hide_index=True)
+        # Success rate (rolling mean)
+        window = min(20, len(success) // 5) if len(success) > 5 else 1
+        rolling_success = pd.Series(success).rolling(window=window, min_periods=1).mean() * 100
+
+        fig.add_trace(
+            go.Scatter(x=episodes[:len(success)], y=rolling_success, mode='lines',
+                      name=f'Success Rate (Rolling {window})', fill='tozeroy', line=dict(color='green'))
+        )
+
+        # Add curriculum stage transitions as vertical lines
+        if curriculum:
+            for i in range(1, len(curriculum)):
+                if curriculum[i] != curriculum[i-1]:
+                    fig.add_vline(x=i, line_dash="dash", line_color="red",
+                                 annotation_text=f"Stage {int(curriculum[i]) + 1}")
+
+        fig.update_layout(
+            title="Success Rate Over Training",
+            xaxis_title="Episode",
+            yaxis_title="Success Rate (%)",
+            yaxis_range=[0, 100],
+            height=400
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Stage breakdown
+        if curriculum:
+            st.subheader("Stage Breakdown")
+            stage_data = []
+            for stage_id in sorted(set(int(s) for s in curriculum)):
+                stage_episodes = [i for i, s in enumerate(curriculum) if int(s) == stage_id]
+                stage_success = [success[i] for i in stage_episodes if i < len(success)]
+                stage_data.append({
+                    "Stage": CURRICULUM_STAGES.get(stage_id, {}).get("name", f"Stage {stage_id + 1}"),
+                    "Episodes": len(stage_episodes),
+                    "Success Rate": f"{np.mean(stage_success) * 100:.1f}%" if stage_success else "N/A",
+                    "Speed": CURRICULUM_STAGES.get(stage_id, {}).get("speed", "?"),
+                    "Evasion": CURRICULUM_STAGES.get(stage_id, {}).get("evasion", "?"),
+                })
+            st.dataframe(pd.DataFrame(stage_data), use_container_width=True, hide_index=True)
+
+    with tab3:
+        # Policy and Value losses
+        fig = make_subplots(rows=1, cols=2, subplot_titles=("Policy Loss", "Value Loss"))
+
+        policy_loss = history.get("policy_loss", [])
+        value_loss = history.get("value_loss", [])
+
+        if policy_loss:
+            fig.add_trace(
+                go.Scatter(y=policy_loss, mode='lines', name='Policy Loss', line=dict(color='purple')),
+                row=1, col=1
+            )
+
+        if value_loss:
+            fig.add_trace(
+                go.Scatter(y=value_loss, mode='lines', name='Value Loss', line=dict(color='red')),
+                row=1, col=2
+            )
+
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab4:
+        # Exploration metrics
+        fig = make_subplots(rows=1, cols=2, subplot_titles=("Policy Entropy", "Role Entropy"))
+
+        entropy = history.get("entropy", [])
+        role_entropy = history.get("role_entropy", [])
+
+        if entropy:
+            fig.add_trace(
+                go.Scatter(y=entropy, mode='lines', name='Policy Entropy', line=dict(color='teal')),
+                row=1, col=1
+            )
+
+        if role_entropy:
+            fig.add_trace(
+                go.Scatter(y=role_entropy, mode='lines', name='Role Entropy', line=dict(color='coral')),
+                row=1, col=2
+            )
+
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def render_checkpoint_analysis(checkpoints: Dict, selected_run: Optional[str]):
+    """Render checkpoint analysis page."""
+    st.header("🔬 Checkpoint Analysis")
+
+    if not checkpoints:
+        st.warning("No checkpoints found")
+        return
+
+    # Show all available runs
+    st.subheader("Available Training Runs")
+
+    run_info = []
+    for run_name, run_data in checkpoints.items():
+        models = run_data.get("models", [])
+        history = run_data.get("history")
+
+        for model_path in models:
+            info = load_checkpoint_info(model_path)
+            if info:
+                run_info.append({
+                    "Run": run_name,
+                    "Model": info.get("file", "?"),
+                    "Size (MB)": f"{info.get('size_mb', 0):.2f}",
+                    "Modified": info.get("modified", "?"),
+                    "Episode": info.get("episode", "?"),
+                    "Stage": info.get("curriculum_stage", "?"),
+                })
+
+    if run_info:
+        st.dataframe(pd.DataFrame(run_info), use_container_width=True, hide_index=True)
+
+    # Detailed checkpoint inspection
+    st.markdown("---")
+    st.subheader("Checkpoint Details")
+
+    if selected_run and checkpoints.get(selected_run, {}).get("models"):
+        models = checkpoints[selected_run]["models"]
+        selected_model = st.selectbox("Select Checkpoint", models, format_func=lambda x: x.name)
+
+        if selected_model and st.button("Inspect Checkpoint"):
+            with st.spinner("Loading checkpoint..."):
+                try:
+                    checkpoint = torch.load(selected_model, map_location='cpu', weights_only=False)
+
+                    if isinstance(checkpoint, dict):
+                        st.success(f"Checkpoint loaded: {len(checkpoint)} top-level keys")
+
+                        # Display structure
+                        with st.expander("Checkpoint Structure"):
+                            for key in checkpoint.keys():
+                                value = checkpoint[key]
+                                if isinstance(value, torch.Tensor):
+                                    st.write(f"**{key}**: Tensor {list(value.shape)}")
+                                elif isinstance(value, dict):
+                                    st.write(f"**{key}**: Dict with {len(value)} keys")
+                                else:
+                                    st.write(f"**{key}**: {type(value).__name__}")
+
+                        # Display stored metrics
+                        if "episode" in checkpoint:
+                            st.info(f"Episode: {checkpoint['episode']}")
+                        if "curriculum_stage" in checkpoint:
+                            stage = int(checkpoint['curriculum_stage'])
+                            st.info(f"Curriculum Stage: {CURRICULUM_STAGES.get(stage, {}).get('name', f'Stage {stage + 1}')}")
+                        if "success_rate" in checkpoint:
+                            st.info(f"Success Rate: {checkpoint['success_rate'] * 100:.1f}%")
+                    else:
+                        st.info(f"Checkpoint is a {type(checkpoint).__name__}")
+                except Exception as e:
+                    st.error(f"Error loading checkpoint: {e}")
+
+
+def render_live_simulation():
+    """Render live simulation page."""
+    st.header("🎮 Live Simulation")
+
+    st.info("Live simulation requires environment initialization. Configure and run below.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Environment Settings")
+        num_agents = st.slider("Number of Agents", 10, 100, 50, step=10)
+        arena_size = st.slider("Arena Size", 4000, 12000, 8000, step=1000)
+        target_speed_mult = st.slider("Target Speed Multiplier", 1.0, 4.0, 1.5, step=0.5)
+        use_projectiles = st.checkbox("Enable Projectiles", value=True)
+
+    with col2:
+        st.subheader("Visualization Settings")
+        max_steps = st.slider("Max Steps", 100, 500, 300, step=50)
+        show_trajectories = st.checkbox("Show Trajectories", value=True)
+        show_roles = st.checkbox("Show Agent Roles", value=True)
+        show_projectiles = st.checkbox("Show Projectiles", value=True)
+
+    if st.button("🚀 Run Simulation", use_container_width=True):
+        st.warning("Simulation requires loading trained models. Use `run_evaluation.py` for full evaluation.")
+
+        # Placeholder for simulation
+        st.subheader("Simulation Preview (Placeholder)")
+
+        # Generate mock trajectory data
+        fig = go.Figure()
+
+        # Mock agent positions
+        np.random.seed(42)
+        for i in range(min(10, num_agents)):
+            t = np.linspace(0, 1, 50)
+            x = np.random.randn() * 1000 + t * np.random.randn() * 500
+            y = np.random.randn() * 1000 + t * np.random.randn() * 500
+            fig.add_trace(go.Scatter(x=x, y=y, mode='lines', name=f'Agent {i}',
+                                    line=dict(width=2), opacity=0.7))
+
+        # Mock target
+        t = np.linspace(0, 1, 50)
+        tx = -3000 + t * 6000
+        ty = np.sin(t * 4 * np.pi) * 500
+        fig.add_trace(go.Scatter(x=tx, y=ty, mode='lines+markers', name='Target',
+                                line=dict(color='red', width=3)))
+
+        fig.update_layout(
+            title="Simulation Trajectories (Mock Data)",
+            xaxis_title="X Position (m)",
+            yaxis_title="Y Position (m)",
+            height=500,
+            xaxis=dict(scaleanchor="y", scaleratio=1)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def render_curriculum_metrics(checkpoints: Dict, selected_run: Optional[str]):
+    """Render curriculum-specific metrics."""
+    st.header("📈 Curriculum Learning Metrics")
+
+    # Curriculum stage overview
+    st.subheader("Curriculum Stages")
+
+    stage_df = pd.DataFrame([
+        {"Stage": f"Stage {i+1}", **CURRICULUM_STAGES[i]}
+        for i in range(4)
+    ])
+    stage_df["Success Threshold"] = ["80%", "70%", "60%", "50%"]
+    stage_df["Min Episodes"] = [100, 150, 200, 300]
+    st.dataframe(stage_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
-    st.subheader("System Architecture")
+    if not selected_run or not checkpoints.get(selected_run, {}).get("history"):
+        st.info("Select a training run to see curriculum progression")
+        return
 
-    st.markdown("""
-    ### HYPERION Components
-    
-    **Environment**
-    - Multi-agent PettingZoo environment
-    - Realistic physics simulation
-    - Sensor models (RF, thermal)
-    - Communication networks
-    
-    **Detection Module**
-    - Multi-sensor fusion (Kalman filtering)
-    - Neural network threat detector
-    - Multi-target tracking
-    
-    **Training Pipeline**
-    - RLlib with PPO algorithm
-    - Curriculum learning
-    - Distributed training support
-    
-    **Evaluation**
-    - Comprehensive metrics tracking
-    - Performance analysis
-    - Results visualization
-    """)
+    history = load_training_history(checkpoints[selected_run]["history"])
+    if not history:
+        return
+
+    curriculum = history.get("curriculum_stage", [])
+    success = history.get("success", [])
+    episode_length = history.get("episode_length", [])
+
+    if not curriculum:
+        st.warning("No curriculum data in training history")
+        return
+
+    # Stage progression timeline
+    st.subheader("Stage Progression Timeline")
+
+    fig = go.Figure()
+
+    episodes = list(range(1, len(curriculum) + 1))
+    fig.add_trace(
+        go.Scatter(x=episodes, y=curriculum, mode='lines+markers', name='Curriculum Stage',
+                  line=dict(color='purple', width=2), marker=dict(size=4))
+    )
+
+    fig.update_layout(
+        xaxis_title="Episode",
+        yaxis_title="Stage",
+        yaxis=dict(tickmode='array', tickvals=[0, 1, 2, 3],
+                  ticktext=['Stage 1', 'Stage 2', 'Stage 3', 'Stage 4']),
+        height=300
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Per-stage analysis
+    st.subheader("Per-Stage Performance")
+
+    stage_metrics = []
+    for stage_id in sorted(set(int(s) for s in curriculum)):
+        stage_mask = [int(s) == stage_id for s in curriculum]
+        stage_success = [success[i] for i, m in enumerate(stage_mask) if m and i < len(success)]
+        stage_lengths = [episode_length[i] for i, m in enumerate(stage_mask) if m and i < len(episode_length)]
+
+        stage_metrics.append({
+            "Stage": stage_id + 1,
+            "Episodes": sum(stage_mask),
+            "Successes": sum(stage_success),
+            "Success Rate": np.mean(stage_success) * 100 if stage_success else 0,
+            "Avg Episode Length": np.mean(stage_lengths) if stage_lengths else 0,
+        })
+
+    metrics_df = pd.DataFrame(stage_metrics)
+
+    # Create bar chart
+    fig = make_subplots(rows=1, cols=2, subplot_titles=("Success Rate by Stage", "Episode Count by Stage"))
+
+    fig.add_trace(
+        go.Bar(x=metrics_df["Stage"], y=metrics_df["Success Rate"], name="Success Rate %",
+              marker_color='green'),
+        row=1, col=1
+    )
+
+    fig.add_trace(
+        go.Bar(x=metrics_df["Stage"], y=metrics_df["Episodes"], name="Episodes",
+              marker_color='blue'),
+        row=1, col=2
+    )
+
+    fig.update_layout(height=400, showlegend=False)
+    fig.update_xaxes(title_text="Stage", row=1, col=1)
+    fig.update_xaxes(title_text="Stage", row=1, col=2)
+    fig.update_yaxes(title_text="Success Rate (%)", row=1, col=1)
+    fig.update_yaxes(title_text="Episode Count", row=1, col=2)
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Detailed table
+    st.dataframe(metrics_df.style.format({
+        "Success Rate": "{:.1f}%",
+        "Avg Episode Length": "{:.1f}"
+    }), use_container_width=True, hide_index=True)
+
+
+def render_role_distribution(checkpoints: Dict, selected_run: Optional[str]):
+    """Render role distribution analysis."""
+    st.header("🤖 Hierarchical Role Distribution")
+
+    # Role overview
+    st.subheader("Agent Roles")
+
+    roles = [
+        {"Role": "SCOUT", "Icon": "🔍", "Purpose": "Early detection, high speed reconnaissance",
+         "Priority": "Maximize detection coverage, stay distant from target"},
+        {"Role": "TRACKER", "Icon": "📡", "Purpose": "Maintain target lock, relay tracking info",
+         "Priority": "Medium distance, continuous LOS to target"},
+        {"Role": "INTERCEPTOR", "Icon": "🎯", "Purpose": "Close in and intercept/fire on target",
+         "Priority": "Converge to optimal firing positions"},
+        {"Role": "SUPPORT", "Icon": "🛡️", "Purpose": "Backup interceptors, fill coverage gaps",
+         "Priority": "Position for contingency intercept"},
+    ]
+
+    role_df = pd.DataFrame(roles)
+    st.dataframe(role_df, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    st.subheader("Role Assignment Analysis")
+
+    if not selected_run or not checkpoints.get(selected_run, {}).get("history"):
+        st.info("Select a training run with hierarchical policy data")
+
+        # Show mock distribution
+        fig = go.Figure(data=[
+            go.Pie(labels=['SCOUT', 'TRACKER', 'INTERCEPTOR', 'SUPPORT'],
+                  values=[15, 10, 20, 5], hole=.4)
+        ])
+        fig.update_layout(title="Example Role Distribution (Mock Data)")
+        st.plotly_chart(fig, use_container_width=True)
+        return
+
+    history = load_training_history(checkpoints[selected_run]["history"])
+    if not history:
+        return
+
+    role_entropy = history.get("role_entropy", [])
+
+    if role_entropy:
+        st.subheader("Role Assignment Entropy Over Training")
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(y=role_entropy, mode='lines', name='Role Entropy',
+                      line=dict(color='coral', width=2))
+        )
+        fig.add_hline(y=np.log(4), line_dash="dash", line_color="gray",
+                     annotation_text="Max Entropy (uniform)")
+
+        fig.update_layout(
+            xaxis_title="Training Update",
+            yaxis_title="Role Entropy",
+            height=400
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.info("""
+        **Role Entropy Interpretation:**
+        - High entropy (~1.39) = Uniform role distribution
+        - Low entropy = Specialized role assignments
+        - Decreasing entropy over training indicates the policy is learning to specialize roles
+        """)
+
+
+def render_system_info():
+    """Render system information page."""
+    st.header("ℹ️ System Information")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("HYPERION Architecture")
+        st.markdown("""
+        ### Core Components
+
+        **Environment (`scaled_environment.py`)**
+        - 50-100+ agent support
+        - 8000x8000 unit arena
+        - Adversarial target with evasion
+        - Projectile system with PN guidance
+
+        **Models**
+        - `SwarmGNN`: Graph neural network for agent communication
+        - `HierarchicalMAPPO`: Multi-agent PPO with role-based policies
+        - `ThreatDetector`: Neural threat detection
+
+        **Training Pipeline**
+        - Parameterized curriculum learning
+        - 4-stage difficulty progression
+        - Intrinsic rewards (novelty, geometry, anti-trailing)
+        """)
+
+    with col2:
+        st.subheader("Curriculum Configuration")
+
+        stage_info = """
+        | Stage | Speed | Evasion | Threshold |
+        |-------|-------|---------|-----------|
+        | 1 | 1.5x (450 m/s) | None | 80% |
+        | 2 | 2.0x (600 m/s) | Basic | 70% |
+        | 3 | 3.0x (900 m/s) | Medium | 60% |
+        | 4 | 4.0x (1200 m/s) | Full | 50% |
+        """
+        st.markdown(stage_info)
+
+        st.subheader("Reward Structure")
+        rewards = """
+        - **Intercept**: +100.0
+        - **Escape**: -100.0
+        - **Projectile Hit**: +50.0
+        - **Geometry Bonus**: +1.0
+        - **Trailing Penalty**: -0.5
+        - **Launch Cost**: -0.5
+        """
+        st.markdown(rewards)
 
     st.markdown("---")
 
-    st.subheader("About HYPERION")
+    # Check for available data
+    st.subheader("Data Status")
 
-    st.info("""
-    HYPERION (Hypersonic Defense Operations) is a sophisticated machine learning 
-    platform for simulating and optimizing autonomous drone swarms for hypersonic 
-    threat detection and interception.
-    
-    Built with multi-agent reinforcement learning, advanced sensor fusion, and 
-    production-grade evaluation tools.
-    """)
+    checkpoints = find_checkpoints()
+    outputs_dir = Path("outputs")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Training Runs", len(checkpoints))
+
+    with col2:
+        total_checkpoints = sum(len(v.get("models", [])) for v in checkpoints.values())
+        st.metric("Total Checkpoints", total_checkpoints)
+
+    with col3:
+        output_files = list(outputs_dir.glob("*.json")) if outputs_dir.exists() else []
+        st.metric("Evaluation Results", len(output_files))
+
+    # Quick links
+    st.markdown("---")
+    st.subheader("Quick Actions")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if st.button("📁 Refresh Data", use_container_width=True):
+            st.rerun()
+
+    with col2:
+        if st.button("📊 Export Summary", use_container_width=True):
+            # Create summary JSON
+            summary = {
+                "timestamp": datetime.now().isoformat(),
+                "checkpoints": {k: {"models": [str(p) for p in v.get("models", [])]}
+                               for k, v in checkpoints.items()},
+            }
+            st.json(summary)
+
+    with col3:
+        st.button("🔄 Clear Cache", use_container_width=True, on_click=st.cache_data.clear)
 
 
 if __name__ == "__main__":
