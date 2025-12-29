@@ -1,7 +1,7 @@
 # .gitignore for Hyperion Project V1.0
 
 # --- OS generated files ---
-.DSS_Store
+.DS_Store
 Thumbs.db
 
 # --- Python / Environment ---
@@ -21,7 +21,7 @@ set.cfg
 
 # --- Jupyter Notebooks ---
 .ipynb_checkpoints
-*/.ipynb_checkpoints/*
+*/.ipynb_checkpoints/
 
 # -- Data -- 
 docs/
@@ -41,7 +41,6 @@ data/processed/
 *.pb
 *.onnx
 *.weights
-/scripts
 
 
 # Distribution / packaging

@@ -1,0 +1,27 @@
+<svg width="220" height="60" viewBox="0 0 220 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Icon -->
+    <g transform="translate(5, 5)">
+        <!-- Outer shield hexagon -->
+        <polygon points="25,2 45,12.5 45,37.5 25,48 5,37.5 5,12.5" stroke="url(#full-gradient)" stroke-width="1.5" fill="none"/>
+        <!-- Central sun/core -->
+        <circle cx="25" cy="22" r="6" fill="url(#full-gradient)"/>
+        <!-- Sun rays -->
+        <line x1="25" y1="12" x2="25" y2="7" stroke="url(#full-gradient)" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="32" y1="17" x2="36" y2="13" stroke="url(#full-gradient)" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="18" y1="17" x2="14" y2="13" stroke="url(#full-gradient)" stroke-width="1.5" stroke-linecap="round"/>
+        <!-- Swarm formation (5 drones as dots) -->
+        <circle cx="25" cy="38" r="2" fill="url(#full-gradient)"/>
+        <circle cx="16" cy="35" r="2" fill="url(#full-gradient)"/>
+        <circle cx="34" cy="35" r="2" fill="url(#full-gradient)"/>
+        <circle cx="10" cy="30" r="2" fill="url(#full-gradient)"/>
+        <circle cx="40" cy="30" r="2" fill="url(#full-gradient)"/>
+    </g>
+    <!-- Text -->
+    <text x="65" y="38" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="url(#full-gradient)" letter-spacing="2">HYPERION</text>
+    <defs>
+        <linearGradient id="full-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#f7931e;stop-opacity:1" />
+        </linearGradient>
+    </defs>
+</svg>
