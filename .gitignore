@@ -33,6 +33,7 @@ data/processed/
 *.parquet
 *.sql
 *.sqlite
+assets/
 
 # -- Models & Heavy Binaries ---
 *.pkl
