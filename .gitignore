@@ -1,8 +1,13 @@
-# .gitignore for Hyperion Project V1.0
+# .gitignore for Hyperion Project 
 
-# --- OS generated files ---
+# — MAC OS generated files ---
 .DS_Store
+__MACOSX/
+.AppleDouble
+.LSOverride
+Icon[]
 Thumbs.db
+
 
 # --- Python / Environment ---
 __pycache__/
@@ -12,28 +17,27 @@ __pycache__/
 *.egg-info/
 .eggs/
 venv/
-/env/
+env/
 .venv
 .evn
 pip-log.txt
 pip-delete-this-directory.txt
 set.cfg
 
-# --- Jupyter Notebooks ---
+# --- Notebooks ---
 .ipynb_checkpoints
-*/.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
 
 # -- Data -- 
-docs/
-data/raw/
-data/processed/
+assets/
+docs/*
+!docs/wiki*
 *.csv
 *.json
 *.xlsx
 *.parquet
 *.sql
 *.sqlite
-assets/
 
 # -- Models & Heavy Binaries ---
 *.pkl
@@ -43,7 +47,6 @@ assets/
 *.onnx
 *.weights
 
-
 # Distribution / packaging
 build/
 dist/
@@ -52,13 +55,18 @@ target/
 bin/
 obj/
 
-# --- IDEs ---
-.vscode/
-.code-workspace
-.idea/
-*.swp
+# --- VSCode ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+!*.code-workspace
+
 
 # --- Tests / Coverage ---
+checkpoints/
 .coverage
 .coverage.*
 htmlcov/
@@ -74,5 +82,3 @@ coverage.xml
 *.log
 *.sqlite3
 *.db
-*.pt
-*.yaml
