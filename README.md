@@ -7,7 +7,7 @@
 </p>  
 <br>
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg?style=for-the-badge)](https://www.python.org/downloads/)
 [![GPLv3.0](https://img.shields.io/badge/GPL--3.0-red?style=for-the-badge)](https://choosealicense.com/licenses/gpl-3.0/)
 
 HYPERION is a sophisticated machine learning platform designed to simulate and optimize autonomous drone swarms for the detection, tracking, and interception of hypersonic and sub hypersonic threats in aerospace and defense scenarios. The system leverages Multi-Agent Reinforcement Learning (MARL) to enable decentralized coordination among UAVs in high-stakes, dynamic environments.
@@ -253,40 +253,8 @@ python -m pytest tests/test_visualization.py
 
 ### ARSHI Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    HIVE INTELLIGENCE ARCHITECTURE                   │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  LAYER 1: OPPORTUNISTIC SENSING                                     │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │
-│  │ Plasma  │ │ Acoustic│ │ Thermal │ │ Magnetic│ │  Swarm  │        │
-│  │   RF    │ │  Array  │ │  Wake   │ │ Anomaly │ │ Proprio │        │
-│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘        │
-│       └───────────┴─────┬─────┴───────────┴───────────┘             │
-│                         ▼                                           │
-│  LAYER 2: BAYESIAN BELIEF FUSION                                    │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  Per-agent probabilistic belief over threat location        │    │
-│  │  Particle filter / Gaussian with uncertainty quantification │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                         │                                           │
-│                         ▼                                           │
-│  LAYER 3: GOSSIP PROTOCOL (Comms-Resilient)                         │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  Epidemic-style belief sharing with covariance intersection │    │
-│  │  Works with 90%+ packet loss, no central coordinator        │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                         │                                           │
-│                         ▼                                           │
-│  LAYER 4: RESILIENT GNN COORDINATION                                │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  Degradation-aware message passing with edge reliability    │    │
-│  │  Isolation detection and self-fallback mechanisms           │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
+![Hive Intelligence Architecture drawio](https://github.com/user-attachments/assets/64b3b59b-59fb-42d9-bf9a-885bf51fa3a3)
+
 
 ### Physics Model
 
@@ -370,9 +338,6 @@ Inspired by prior portfolio projects:
 
 This is a portfolio project. For questions or collaboration:
 
-**Michael Gurule**
-Data Scientist | Machine Learning Engineer
-
 [![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](michaelgurule1164@gmail.com)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](www.linkedin.com/in/michael-j-gurule-447aa2134)
 [![Medium](https://img.shields.io/badge/Medium-12100E?style=for-the-badge&logo=medium&logoColor=white)](https://medium.com/@michaelgurule1164)
@@ -385,5 +350,5 @@ Data Scientist | Machine Learning Engineer
   <img src="https://github.com/user-attachments/assets/ecb66c61-85c5-4d24-aaa3-99ddf2cd33cf" alt="MICHAEL GURULE">
 <p align="center">
 <b>Data Scientist | Machine Learning Engineer</b>
-<sub>HYPERION | Data: (Public)</sub>
+<p align="center"><sub>HYPERION | Data: (Public)</sub>
 </p>
