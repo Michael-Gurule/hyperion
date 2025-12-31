@@ -26,7 +26,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 # Page configuration
 st.set_page_config(
     page_title="HYPERION Dashboard",
-    page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -44,7 +43,7 @@ def load_training_history(path: Path) -> Optional[Dict[str, List]]:
     """Load training history from YAML file."""
     if not path.exists():
         return None
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         return yaml.safe_load(f)
 
 
@@ -53,11 +52,13 @@ def load_checkpoint_info(path: Path) -> Optional[Dict]:
     if not path.exists():
         return None
     try:
-        checkpoint = torch.load(path, map_location='cpu', weights_only=False)
+        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
         info = {
             "file": path.name,
             "size_mb": path.stat().st_size / (1024 * 1024),
-            "modified": datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+            "modified": datetime.fromtimestamp(path.stat().st_mtime).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
         }
         # Extract training info if available
         if isinstance(checkpoint, dict):
@@ -84,7 +85,7 @@ def find_checkpoints() -> Dict[str, List[Path]]:
                 yaml_files = list(subdir.glob("*.yaml"))
                 result[subdir.name] = {
                     "models": pt_files,
-                    "history": yaml_files[0] if yaml_files else None
+                    "history": yaml_files[0] if yaml_files else None,
                 }
     return result
 
@@ -93,57 +94,54 @@ def main():
     """Main dashboard application."""
 
     # Header
-    st.title("🎯 HYPERION: Enhanced Swarm Intelligence Dashboard")
+    st.title(" HYPERION: Enhanced Swarm Intelligence Dashboard")
     st.markdown("*Hypersonic Defense Operations - Training & Evaluation Platform*")
     st.markdown("---")
 
     # Sidebar
     with st.sidebar:
-        st.header("⚙️ Navigation")
+        st.header(" Navigation")
         page = st.radio(
             "Select View",
             [
-                "📊 Training Progress",
-                "🔬 Checkpoint Analysis",
-                "🎮 Live Simulation",
-                "📈 Curriculum Metrics",
-                "🤖 Role Distribution",
-                "ℹ️ System Info",
-            ]
+                " Training Progress",
+                " Checkpoint Analysis",
+                " Live Simulation",
+                " Curriculum Metrics",
+                " Role Distribution",
+                " System Info",
+            ],
         )
 
         st.markdown("---")
-        st.header("📁 Data Source")
+        st.header(" Data Source")
 
         # Find available checkpoints
         checkpoints = find_checkpoints()
         if checkpoints:
-            selected_run = st.selectbox(
-                "Select Training Run",
-                list(checkpoints.keys())
-            )
+            selected_run = st.selectbox("Select Training Run", list(checkpoints.keys()))
         else:
             selected_run = None
             st.warning("No checkpoints found")
 
     # Main content based on selected page
-    if page == "📊 Training Progress":
+    if page == " Training Progress":
         render_training_progress(checkpoints, selected_run)
-    elif page == "🔬 Checkpoint Analysis":
+    elif page == " Checkpoint Analysis":
         render_checkpoint_analysis(checkpoints, selected_run)
-    elif page == "🎮 Live Simulation":
+    elif page == " Live Simulation":
         render_live_simulation()
-    elif page == "📈 Curriculum Metrics":
+    elif page == " Curriculum Metrics":
         render_curriculum_metrics(checkpoints, selected_run)
-    elif page == "🤖 Role Distribution":
+    elif page == " Role Distribution":
         render_role_distribution(checkpoints, selected_run)
-    elif page == "ℹ️ System Info":
+    elif page == " System Info":
         render_system_info()
 
 
 def render_training_progress(checkpoints: Dict, selected_run: Optional[str]):
     """Render training progress visualization."""
-    st.header("📊 Training Progress")
+    st.header(" Training Progress")
 
     if not selected_run or not checkpoints.get(selected_run, {}).get("history"):
         st.warning("No training history available. Select a run with training data.")
@@ -161,9 +159,19 @@ def render_training_progress(checkpoints: Dict, selected_run: Optional[str]):
     col1, col2, col3, col4 = st.columns(4)
 
     num_episodes = len(history.get("episode_reward", []))
-    success_rate = np.mean(history.get("success", [])) * 100 if history.get("success") else 0
-    avg_reward = np.mean(history.get("episode_reward", [])) if history.get("episode_reward") else 0
-    final_stage = int(history.get("curriculum_stage", [0])[-1]) if history.get("curriculum_stage") else 0
+    success_rate = (
+        np.mean(history.get("success", [])) * 100 if history.get("success") else 0
+    )
+    avg_reward = (
+        np.mean(history.get("episode_reward", []))
+        if history.get("episode_reward")
+        else 0
+    )
+    final_stage = (
+        int(history.get("curriculum_stage", [0])[-1])
+        if history.get("curriculum_stage")
+        else 0
+    )
 
     col1.metric("Total Episodes", num_episodes)
     col2.metric("Success Rate", f"{success_rate:.1f}%")
@@ -179,36 +187,72 @@ def render_training_progress(checkpoints: Dict, selected_run: Optional[str]):
     episodes = list(range(1, num_episodes + 1))
 
     # Tab layout for different metrics
-    tab1, tab2, tab3, tab4 = st.tabs(["Rewards", "Success Rate", "Losses", "Exploration"])
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["Rewards", "Success Rate", "Losses", "Exploration"]
+    )
 
     with tab1:
         # Episode Rewards
-        fig = make_subplots(rows=2, cols=1, subplot_titles=("Episode Reward", "Intrinsic Reward"))
+        fig = make_subplots(
+            rows=2, cols=1, subplot_titles=("Episode Reward", "Intrinsic Reward")
+        )
 
         # Episode reward with smoothing
         rewards = history.get("episode_reward", [])
         smoothed_rewards = pd.Series(rewards).rolling(window=10, min_periods=1).mean()
 
         fig.add_trace(
-            go.Scatter(x=episodes, y=rewards, mode='lines', name='Raw', opacity=0.3, line=dict(color='blue')),
-            row=1, col=1
+            go.Scatter(
+                x=episodes,
+                y=rewards,
+                mode="lines",
+                name="Raw",
+                opacity=0.3,
+                line=dict(color="blue"),
+            ),
+            row=1,
+            col=1,
         )
         fig.add_trace(
-            go.Scatter(x=episodes, y=smoothed_rewards, mode='lines', name='Smoothed (10)', line=dict(color='blue', width=2)),
-            row=1, col=1
+            go.Scatter(
+                x=episodes,
+                y=smoothed_rewards,
+                mode="lines",
+                name="Smoothed (10)",
+                line=dict(color="blue", width=2),
+            ),
+            row=1,
+            col=1,
         )
 
         # Intrinsic reward
         intrinsic = history.get("intrinsic_reward", [])
         if intrinsic:
-            smoothed_intrinsic = pd.Series(intrinsic).rolling(window=10, min_periods=1).mean()
-            fig.add_trace(
-                go.Scatter(x=episodes[:len(intrinsic)], y=intrinsic, mode='lines', name='Raw', opacity=0.3, line=dict(color='orange')),
-                row=2, col=1
+            smoothed_intrinsic = (
+                pd.Series(intrinsic).rolling(window=10, min_periods=1).mean()
             )
             fig.add_trace(
-                go.Scatter(x=episodes[:len(intrinsic)], y=smoothed_intrinsic, mode='lines', name='Smoothed', line=dict(color='orange', width=2)),
-                row=2, col=1
+                go.Scatter(
+                    x=episodes[: len(intrinsic)],
+                    y=intrinsic,
+                    mode="lines",
+                    name="Raw",
+                    opacity=0.3,
+                    line=dict(color="orange"),
+                ),
+                row=2,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=episodes[: len(intrinsic)],
+                    y=smoothed_intrinsic,
+                    mode="lines",
+                    name="Smoothed",
+                    line=dict(color="orange", width=2),
+                ),
+                row=2,
+                col=1,
             )
 
         fig.update_layout(height=600, showlegend=True)
@@ -223,26 +267,38 @@ def render_training_progress(checkpoints: Dict, selected_run: Optional[str]):
 
         # Success rate (rolling mean)
         window = min(20, len(success) // 5) if len(success) > 5 else 1
-        rolling_success = pd.Series(success).rolling(window=window, min_periods=1).mean() * 100
+        rolling_success = (
+            pd.Series(success).rolling(window=window, min_periods=1).mean() * 100
+        )
 
         fig.add_trace(
-            go.Scatter(x=episodes[:len(success)], y=rolling_success, mode='lines',
-                      name=f'Success Rate (Rolling {window})', fill='tozeroy', line=dict(color='green'))
+            go.Scatter(
+                x=episodes[: len(success)],
+                y=rolling_success,
+                mode="lines",
+                name=f"Success Rate (Rolling {window})",
+                fill="tozeroy",
+                line=dict(color="green"),
+            )
         )
 
         # Add curriculum stage transitions as vertical lines
         if curriculum:
             for i in range(1, len(curriculum)):
-                if curriculum[i] != curriculum[i-1]:
-                    fig.add_vline(x=i, line_dash="dash", line_color="red",
-                                 annotation_text=f"Stage {int(curriculum[i]) + 1}")
+                if curriculum[i] != curriculum[i - 1]:
+                    fig.add_vline(
+                        x=i,
+                        line_dash="dash",
+                        line_color="red",
+                        annotation_text=f"Stage {int(curriculum[i]) + 1}",
+                    )
 
         fig.update_layout(
             title="Success Rate Over Training",
             xaxis_title="Episode",
             yaxis_title="Success Rate (%)",
             yaxis_range=[0, 100],
-            height=400
+            height=400,
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -251,34 +307,60 @@ def render_training_progress(checkpoints: Dict, selected_run: Optional[str]):
             st.subheader("Stage Breakdown")
             stage_data = []
             for stage_id in sorted(set(int(s) for s in curriculum)):
-                stage_episodes = [i for i, s in enumerate(curriculum) if int(s) == stage_id]
+                stage_episodes = [
+                    i for i, s in enumerate(curriculum) if int(s) == stage_id
+                ]
                 stage_success = [success[i] for i in stage_episodes if i < len(success)]
-                stage_data.append({
-                    "Stage": CURRICULUM_STAGES.get(stage_id, {}).get("name", f"Stage {stage_id + 1}"),
-                    "Episodes": len(stage_episodes),
-                    "Success Rate": f"{np.mean(stage_success) * 100:.1f}%" if stage_success else "N/A",
-                    "Speed": CURRICULUM_STAGES.get(stage_id, {}).get("speed", "?"),
-                    "Evasion": CURRICULUM_STAGES.get(stage_id, {}).get("evasion", "?"),
-                })
-            st.dataframe(pd.DataFrame(stage_data), use_container_width=True, hide_index=True)
+                stage_data.append(
+                    {
+                        "Stage": CURRICULUM_STAGES.get(stage_id, {}).get(
+                            "name", f"Stage {stage_id + 1}"
+                        ),
+                        "Episodes": len(stage_episodes),
+                        "Success Rate": f"{np.mean(stage_success) * 100:.1f}%"
+                        if stage_success
+                        else "N/A",
+                        "Speed": CURRICULUM_STAGES.get(stage_id, {}).get("speed", "?"),
+                        "Evasion": CURRICULUM_STAGES.get(stage_id, {}).get(
+                            "evasion", "?"
+                        ),
+                    }
+                )
+            st.dataframe(
+                pd.DataFrame(stage_data), use_container_width=True, hide_index=True
+            )
 
     with tab3:
         # Policy and Value losses
-        fig = make_subplots(rows=1, cols=2, subplot_titles=("Policy Loss", "Value Loss"))
+        fig = make_subplots(
+            rows=1, cols=2, subplot_titles=("Policy Loss", "Value Loss")
+        )
 
         policy_loss = history.get("policy_loss", [])
         value_loss = history.get("value_loss", [])
 
         if policy_loss:
             fig.add_trace(
-                go.Scatter(y=policy_loss, mode='lines', name='Policy Loss', line=dict(color='purple')),
-                row=1, col=1
+                go.Scatter(
+                    y=policy_loss,
+                    mode="lines",
+                    name="Policy Loss",
+                    line=dict(color="purple"),
+                ),
+                row=1,
+                col=1,
             )
 
         if value_loss:
             fig.add_trace(
-                go.Scatter(y=value_loss, mode='lines', name='Value Loss', line=dict(color='red')),
-                row=1, col=2
+                go.Scatter(
+                    y=value_loss,
+                    mode="lines",
+                    name="Value Loss",
+                    line=dict(color="red"),
+                ),
+                row=1,
+                col=2,
             )
 
         fig.update_layout(height=400)
@@ -286,21 +368,35 @@ def render_training_progress(checkpoints: Dict, selected_run: Optional[str]):
 
     with tab4:
         # Exploration metrics
-        fig = make_subplots(rows=1, cols=2, subplot_titles=("Policy Entropy", "Role Entropy"))
+        fig = make_subplots(
+            rows=1, cols=2, subplot_titles=("Policy Entropy", "Role Entropy")
+        )
 
         entropy = history.get("entropy", [])
         role_entropy = history.get("role_entropy", [])
 
         if entropy:
             fig.add_trace(
-                go.Scatter(y=entropy, mode='lines', name='Policy Entropy', line=dict(color='teal')),
-                row=1, col=1
+                go.Scatter(
+                    y=entropy,
+                    mode="lines",
+                    name="Policy Entropy",
+                    line=dict(color="teal"),
+                ),
+                row=1,
+                col=1,
             )
 
         if role_entropy:
             fig.add_trace(
-                go.Scatter(y=role_entropy, mode='lines', name='Role Entropy', line=dict(color='coral')),
-                row=1, col=2
+                go.Scatter(
+                    y=role_entropy,
+                    mode="lines",
+                    name="Role Entropy",
+                    line=dict(color="coral"),
+                ),
+                row=1,
+                col=2,
             )
 
         fig.update_layout(height=400)
@@ -309,7 +405,7 @@ def render_training_progress(checkpoints: Dict, selected_run: Optional[str]):
 
 def render_checkpoint_analysis(checkpoints: Dict, selected_run: Optional[str]):
     """Render checkpoint analysis page."""
-    st.header("🔬 Checkpoint Analysis")
+    st.header(" Checkpoint Analysis")
 
     if not checkpoints:
         st.warning("No checkpoints found")
@@ -326,14 +422,16 @@ def render_checkpoint_analysis(checkpoints: Dict, selected_run: Optional[str]):
         for model_path in models:
             info = load_checkpoint_info(model_path)
             if info:
-                run_info.append({
-                    "Run": run_name,
-                    "Model": info.get("file", "?"),
-                    "Size (MB)": f"{info.get('size_mb', 0):.2f}",
-                    "Modified": info.get("modified", "?"),
-                    "Episode": info.get("episode", "?"),
-                    "Stage": info.get("curriculum_stage", "?"),
-                })
+                run_info.append(
+                    {
+                        "Run": run_name,
+                        "Model": info.get("file", "?"),
+                        "Size (MB)": f"{info.get('size_mb', 0):.2f}",
+                        "Modified": info.get("modified", "?"),
+                        "Episode": info.get("episode", "?"),
+                        "Stage": info.get("curriculum_stage", "?"),
+                    }
+                )
 
     if run_info:
         st.dataframe(pd.DataFrame(run_info), use_container_width=True, hide_index=True)
@@ -344,15 +442,21 @@ def render_checkpoint_analysis(checkpoints: Dict, selected_run: Optional[str]):
 
     if selected_run and checkpoints.get(selected_run, {}).get("models"):
         models = checkpoints[selected_run]["models"]
-        selected_model = st.selectbox("Select Checkpoint", models, format_func=lambda x: x.name)
+        selected_model = st.selectbox(
+            "Select Checkpoint", models, format_func=lambda x: x.name
+        )
 
         if selected_model and st.button("Inspect Checkpoint"):
             with st.spinner("Loading checkpoint..."):
                 try:
-                    checkpoint = torch.load(selected_model, map_location='cpu', weights_only=False)
+                    checkpoint = torch.load(
+                        selected_model, map_location="cpu", weights_only=False
+                    )
 
                     if isinstance(checkpoint, dict):
-                        st.success(f"Checkpoint loaded: {len(checkpoint)} top-level keys")
+                        st.success(
+                            f"Checkpoint loaded: {len(checkpoint)} top-level keys"
+                        )
 
                         # Display structure
                         with st.expander("Checkpoint Structure"):
@@ -369,10 +473,14 @@ def render_checkpoint_analysis(checkpoints: Dict, selected_run: Optional[str]):
                         if "episode" in checkpoint:
                             st.info(f"Episode: {checkpoint['episode']}")
                         if "curriculum_stage" in checkpoint:
-                            stage = int(checkpoint['curriculum_stage'])
-                            st.info(f"Curriculum Stage: {CURRICULUM_STAGES.get(stage, {}).get('name', f'Stage {stage + 1}')}")
+                            stage = int(checkpoint["curriculum_stage"])
+                            st.info(
+                                f"Curriculum Stage: {CURRICULUM_STAGES.get(stage, {}).get('name', f'Stage {stage + 1}')}"
+                            )
                         if "success_rate" in checkpoint:
-                            st.info(f"Success Rate: {checkpoint['success_rate'] * 100:.1f}%")
+                            st.info(
+                                f"Success Rate: {checkpoint['success_rate'] * 100:.1f}%"
+                            )
                     else:
                         st.info(f"Checkpoint is a {type(checkpoint).__name__}")
                 except Exception as e:
@@ -381,9 +489,11 @@ def render_checkpoint_analysis(checkpoints: Dict, selected_run: Optional[str]):
 
 def render_live_simulation():
     """Render live simulation page."""
-    st.header("🎮 Live Simulation")
+    st.header("Live Simulation")
 
-    st.info("Live simulation requires environment initialization. Configure and run below.")
+    st.info(
+        "Live simulation requires environment initialization. Configure and run below."
+    )
 
     col1, col2 = st.columns(2)
 
@@ -391,7 +501,9 @@ def render_live_simulation():
         st.subheader("Environment Settings")
         num_agents = st.slider("Number of Agents", 10, 100, 50, step=10)
         arena_size = st.slider("Arena Size", 4000, 12000, 8000, step=1000)
-        target_speed_mult = st.slider("Target Speed Multiplier", 1.0, 4.0, 1.5, step=0.5)
+        target_speed_mult = st.slider(
+            "Target Speed Multiplier", 1.0, 4.0, 1.5, step=0.5
+        )
         use_projectiles = st.checkbox("Enable Projectiles", value=True)
 
     with col2:
@@ -401,8 +513,10 @@ def render_live_simulation():
         show_roles = st.checkbox("Show Agent Roles", value=True)
         show_projectiles = st.checkbox("Show Projectiles", value=True)
 
-    if st.button("🚀 Run Simulation", use_container_width=True):
-        st.warning("Simulation requires loading trained models. Use `run_evaluation.py` for full evaluation.")
+    if st.button("Run Simulation", use_container_width=True):
+        st.warning(
+            "Simulation requires loading trained models. Use `run_evaluation.py` for full evaluation."
+        )
 
         # Placeholder for simulation
         st.subheader("Simulation Preview (Placeholder)")
@@ -416,37 +530,51 @@ def render_live_simulation():
             t = np.linspace(0, 1, 50)
             x = np.random.randn() * 1000 + t * np.random.randn() * 500
             y = np.random.randn() * 1000 + t * np.random.randn() * 500
-            fig.add_trace(go.Scatter(x=x, y=y, mode='lines', name=f'Agent {i}',
-                                    line=dict(width=2), opacity=0.7))
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=y,
+                    mode="lines",
+                    name=f"Agent {i}",
+                    line=dict(width=2),
+                    opacity=0.7,
+                )
+            )
 
         # Mock target
         t = np.linspace(0, 1, 50)
         tx = -3000 + t * 6000
         ty = np.sin(t * 4 * np.pi) * 500
-        fig.add_trace(go.Scatter(x=tx, y=ty, mode='lines+markers', name='Target',
-                                line=dict(color='red', width=3)))
+        fig.add_trace(
+            go.Scatter(
+                x=tx,
+                y=ty,
+                mode="lines+markers",
+                name="Target",
+                line=dict(color="red", width=3),
+            )
+        )
 
         fig.update_layout(
             title="Simulation Trajectories (Mock Data)",
             xaxis_title="X Position (m)",
             yaxis_title="Y Position (m)",
             height=500,
-            xaxis=dict(scaleanchor="y", scaleratio=1)
+            xaxis=dict(scaleanchor="y", scaleratio=1),
         )
         st.plotly_chart(fig, use_container_width=True)
 
 
 def render_curriculum_metrics(checkpoints: Dict, selected_run: Optional[str]):
     """Render curriculum-specific metrics."""
-    st.header("📈 Curriculum Learning Metrics")
+    st.header(" Curriculum Learning Metrics")
 
     # Curriculum stage overview
     st.subheader("Curriculum Stages")
 
-    stage_df = pd.DataFrame([
-        {"Stage": f"Stage {i+1}", **CURRICULUM_STAGES[i]}
-        for i in range(4)
-    ])
+    stage_df = pd.DataFrame(
+        [{"Stage": f"Stage {i + 1}", **CURRICULUM_STAGES[i]} for i in range(4)]
+    )
     stage_df["Success Threshold"] = ["80%", "70%", "60%", "50%"]
     stage_df["Min Episodes"] = [100, 150, 200, 300]
     st.dataframe(stage_df, use_container_width=True, hide_index=True)
@@ -476,16 +604,25 @@ def render_curriculum_metrics(checkpoints: Dict, selected_run: Optional[str]):
 
     episodes = list(range(1, len(curriculum) + 1))
     fig.add_trace(
-        go.Scatter(x=episodes, y=curriculum, mode='lines+markers', name='Curriculum Stage',
-                  line=dict(color='purple', width=2), marker=dict(size=4))
+        go.Scatter(
+            x=episodes,
+            y=curriculum,
+            mode="lines+markers",
+            name="Curriculum Stage",
+            line=dict(color="purple", width=2),
+            marker=dict(size=4),
+        )
     )
 
     fig.update_layout(
         xaxis_title="Episode",
         yaxis_title="Stage",
-        yaxis=dict(tickmode='array', tickvals=[0, 1, 2, 3],
-                  ticktext=['Stage 1', 'Stage 2', 'Stage 3', 'Stage 4']),
-        height=300
+        yaxis=dict(
+            tickmode="array",
+            tickvals=[0, 1, 2, 3],
+            ticktext=["Stage 1", "Stage 2", "Stage 3", "Stage 4"],
+        ),
+        height=300,
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -495,32 +632,54 @@ def render_curriculum_metrics(checkpoints: Dict, selected_run: Optional[str]):
     stage_metrics = []
     for stage_id in sorted(set(int(s) for s in curriculum)):
         stage_mask = [int(s) == stage_id for s in curriculum]
-        stage_success = [success[i] for i, m in enumerate(stage_mask) if m and i < len(success)]
-        stage_lengths = [episode_length[i] for i, m in enumerate(stage_mask) if m and i < len(episode_length)]
+        stage_success = [
+            success[i] for i, m in enumerate(stage_mask) if m and i < len(success)
+        ]
+        stage_lengths = [
+            episode_length[i]
+            for i, m in enumerate(stage_mask)
+            if m and i < len(episode_length)
+        ]
 
-        stage_metrics.append({
-            "Stage": stage_id + 1,
-            "Episodes": sum(stage_mask),
-            "Successes": sum(stage_success),
-            "Success Rate": np.mean(stage_success) * 100 if stage_success else 0,
-            "Avg Episode Length": np.mean(stage_lengths) if stage_lengths else 0,
-        })
+        stage_metrics.append(
+            {
+                "Stage": stage_id + 1,
+                "Episodes": sum(stage_mask),
+                "Successes": sum(stage_success),
+                "Success Rate": np.mean(stage_success) * 100 if stage_success else 0,
+                "Avg Episode Length": np.mean(stage_lengths) if stage_lengths else 0,
+            }
+        )
 
     metrics_df = pd.DataFrame(stage_metrics)
 
     # Create bar chart
-    fig = make_subplots(rows=1, cols=2, subplot_titles=("Success Rate by Stage", "Episode Count by Stage"))
-
-    fig.add_trace(
-        go.Bar(x=metrics_df["Stage"], y=metrics_df["Success Rate"], name="Success Rate %",
-              marker_color='green'),
-        row=1, col=1
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=("Success Rate by Stage", "Episode Count by Stage"),
     )
 
     fig.add_trace(
-        go.Bar(x=metrics_df["Stage"], y=metrics_df["Episodes"], name="Episodes",
-              marker_color='blue'),
-        row=1, col=2
+        go.Bar(
+            x=metrics_df["Stage"],
+            y=metrics_df["Success Rate"],
+            name="Success Rate %",
+            marker_color="green",
+        ),
+        row=1,
+        col=1,
+    )
+
+    fig.add_trace(
+        go.Bar(
+            x=metrics_df["Stage"],
+            y=metrics_df["Episodes"],
+            name="Episodes",
+            marker_color="blue",
+        ),
+        row=1,
+        col=2,
     )
 
     fig.update_layout(height=400, showlegend=False)
@@ -532,28 +691,47 @@ def render_curriculum_metrics(checkpoints: Dict, selected_run: Optional[str]):
     st.plotly_chart(fig, use_container_width=True)
 
     # Detailed table
-    st.dataframe(metrics_df.style.format({
-        "Success Rate": "{:.1f}%",
-        "Avg Episode Length": "{:.1f}"
-    }), use_container_width=True, hide_index=True)
+    st.dataframe(
+        metrics_df.style.format(
+            {"Success Rate": "{:.1f}%", "Avg Episode Length": "{:.1f}"}
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
 
 
 def render_role_distribution(checkpoints: Dict, selected_run: Optional[str]):
     """Render role distribution analysis."""
-    st.header("🤖 Hierarchical Role Distribution")
+    st.header("Hierarchical Role Distribution")
 
     # Role overview
     st.subheader("Agent Roles")
 
     roles = [
-        {"Role": "SCOUT", "Icon": "🔍", "Purpose": "Early detection, high speed reconnaissance",
-         "Priority": "Maximize detection coverage, stay distant from target"},
-        {"Role": "TRACKER", "Icon": "📡", "Purpose": "Maintain target lock, relay tracking info",
-         "Priority": "Medium distance, continuous LOS to target"},
-        {"Role": "INTERCEPTOR", "Icon": "🎯", "Purpose": "Close in and intercept/fire on target",
-         "Priority": "Converge to optimal firing positions"},
-        {"Role": "SUPPORT", "Icon": "🛡️", "Purpose": "Backup interceptors, fill coverage gaps",
-         "Priority": "Position for contingency intercept"},
+        {
+            "Role": "SCOUT",
+            "Icon": "",
+            "Purpose": "Early detection, high speed reconnaissance",
+            "Priority": "Maximize detection coverage, stay distant from target",
+        },
+        {
+            "Role": "TRACKER",
+            "Icon": "",
+            "Purpose": "Maintain target lock, relay tracking info",
+            "Priority": "Medium distance, continuous LOS to target",
+        },
+        {
+            "Role": "INTERCEPTOR",
+            "Icon": "",
+            "Purpose": "Close in and intercept/fire on target",
+            "Priority": "Converge to optimal firing positions",
+        },
+        {
+            "Role": "SUPPORT",
+            "Icon": "",
+            "Purpose": "Backup interceptors, fill coverage gaps",
+            "Priority": "Position for contingency intercept",
+        },
     ]
 
     role_df = pd.DataFrame(roles)
@@ -566,10 +744,15 @@ def render_role_distribution(checkpoints: Dict, selected_run: Optional[str]):
         st.info("Select a training run with hierarchical policy data")
 
         # Show mock distribution
-        fig = go.Figure(data=[
-            go.Pie(labels=['SCOUT', 'TRACKER', 'INTERCEPTOR', 'SUPPORT'],
-                  values=[15, 10, 20, 5], hole=.4)
-        ])
+        fig = go.Figure(
+            data=[
+                go.Pie(
+                    labels=["SCOUT", "TRACKER", "INTERCEPTOR", "SUPPORT"],
+                    values=[15, 10, 20, 5],
+                    hole=0.4,
+                )
+            ]
+        )
         fig.update_layout(title="Example Role Distribution (Mock Data)")
         st.plotly_chart(fig, use_container_width=True)
         return
@@ -585,16 +768,22 @@ def render_role_distribution(checkpoints: Dict, selected_run: Optional[str]):
 
         fig = go.Figure()
         fig.add_trace(
-            go.Scatter(y=role_entropy, mode='lines', name='Role Entropy',
-                      line=dict(color='coral', width=2))
+            go.Scatter(
+                y=role_entropy,
+                mode="lines",
+                name="Role Entropy",
+                line=dict(color="coral", width=2),
+            )
         )
-        fig.add_hline(y=np.log(4), line_dash="dash", line_color="gray",
-                     annotation_text="Max Entropy (uniform)")
+        fig.add_hline(
+            y=np.log(4),
+            line_dash="dash",
+            line_color="gray",
+            annotation_text="Max Entropy (uniform)",
+        )
 
         fig.update_layout(
-            xaxis_title="Training Update",
-            yaxis_title="Role Entropy",
-            height=400
+            xaxis_title="Training Update", yaxis_title="Role Entropy", height=400
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -608,7 +797,7 @@ def render_role_distribution(checkpoints: Dict, selected_run: Optional[str]):
 
 def render_system_info():
     """Render system information page."""
-    st.header("ℹ️ System Information")
+    st.header("System Information")
 
     col1, col2 = st.columns(2)
 
@@ -686,21 +875,25 @@ def render_system_info():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📁 Refresh Data", use_container_width=True):
+        if st.button(" Refresh Data", use_container_width=True):
             st.rerun()
 
     with col2:
-        if st.button("📊 Export Summary", use_container_width=True):
+        if st.button(" Export Summary", use_container_width=True):
             # Create summary JSON
             summary = {
                 "timestamp": datetime.now().isoformat(),
-                "checkpoints": {k: {"models": [str(p) for p in v.get("models", [])]}
-                               for k, v in checkpoints.items()},
+                "checkpoints": {
+                    k: {"models": [str(p) for p in v.get("models", [])]}
+                    for k, v in checkpoints.items()
+                },
             }
             st.json(summary)
 
     with col3:
-        st.button("🔄 Clear Cache", use_container_width=True, on_click=st.cache_data.clear)
+        st.button(
+            " Clear Cache", use_container_width=True, on_click=st.cache_data.clear
+        )
 
 
 if __name__ == "__main__":
