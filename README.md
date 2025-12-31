@@ -1,5 +1,4 @@
 <br>
-<br>
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/96906e00-9e64-4399-b194-072cf22ab0bd" alt="HYPERION">
@@ -9,14 +8,17 @@
 <br>
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GPLv3.0](https://img.shields.io/badge/GPL--3.0-red?style=for-the-badge)](https://choosealicense.com/licenses/gpl-3.0/)
 
-HYPERION is a sophisticated machine learning platform designed to simulate and optimize autonomous drone swarms for the detection, tracking, and interception of hypersonic threats in aerospace and defense scenarios. The system leverages Multi-Agent Reinforcement Learning (MARL) to enable decentralized coordination among UAVs in high-stakes, dynamic environments.
-
+HYPERION is a sophisticated machine learning platform designed to simulate and optimize autonomous drone swarms for the detection, tracking, and interception of hypersonic and sub hypersonic threats in aerospace and defense scenarios. The system leverages Multi-Agent Reinforcement Learning (MARL) to enable decentralized coordination among UAVs in high-stakes, dynamic environments.
 
 ## Key Features
 
 - **Multi-Agent Reinforcement Learning**: Decentralized swarm coordination using PPO and RLlib
+- **ARSHI System**: Autonomous Resilient Sensing & Hive Intelligence for contested environments
+- **Opportunistic Sensing**: 6 unconventional sensor modalities for degraded operations
+- **Swarm Proprioception**: Novel behavioral inference when sensors are denied
+- **Gossip-Based Belief Propagation**: Convergent consensus with 90%+ packet loss tolerance
 - **Advanced Sensor Fusion**: Multi-modal detection combining RF fingerprinting and thermal signatures
 - **Realistic Physics Simulation**: Hypersonic trajectories (Mach 5+), atmospheric modeling, fuel dynamics
 - **Production-Ready Pipeline**: Complete training, evaluation, and deployment infrastructure
@@ -38,7 +40,7 @@ Hypersonic weapons represent a critical challenge in modern defense, with nation
 
 - Python 3.10 or higher
 - Conda (recommended) or pip
-- 8GB+ RAM for training
+- 16GB+ RAM for training
 
 ### Setup
 ```bash
@@ -51,8 +53,9 @@ conda create -n hyperion python=3.10 -y
 conda activate hyperion
 
 # Install dependencies
-pip install -r requirements.txt
-```
+conda-forge install -r requirements.txt
+# or pip install -r requirements.txt
+``` 
 
 ## Quick Start
 
@@ -70,7 +73,6 @@ python tests/test_visualization.py
 # Start interactive dashboard
 streamlit run src/dashboard/app.py
 ```
-
 The dashboard provides:
 - Live swarm simulation with pursuit policy
 - Multi-episode evaluation
@@ -104,13 +106,23 @@ hyperion/
 ├── src/
 │   ├── env/                    # Environment implementation
 │   │   ├── hypersonic_swarm_env.py
+│   │   ├── scaled_environment.py
 │   │   ├── physics_models.py
+│   │   ├── projectile_system.py
 │   │   ├── visualization.py
 │   │   └── rllib_wrapper.py
 │   ├── models/                 # ML models
-│   │   └── detection.py        # Sensor fusion and threat detection
+│   │   ├── arshi.py            # ARSHI integration module
+│   │   ├── opportunistic_sensors.py  # Multi-modal degraded ops sensors
+│   │   ├── belief_system.py    # Distributed Bayesian belief + gossip
+│   │   ├── resilient_gnn.py    # Degradation-aware GNN communication
+│   │   ├── gnn_communication.py
+│   │   ├── hierarchical_policy.py
+│   │   ├── detection.py        # Sensor fusion and threat detection
+│   │   └── adaptive_sensor_fusion.py
 │   ├── training/               # Training pipeline
 │   │   ├── train_marl.py
+│   │   ├── train_enhanced.py
 │   │   └── curriculum.py
 │   ├── evaluation/             # Evaluation metrics
 │   │   └── metrics.py
@@ -119,7 +131,7 @@ hyperion/
 │   └── utils/                  # Utilities
 │       ├── config_loader.py
 │       └── logger.py
-├── tests/                      # Test suite
+├── tests/                      # Test suite (90%+ coverage)
 ├── outputs/                    # Generated outputs
 ├── checkpoints/                # Model checkpoints
 ├── config.yaml                 # Configuration
@@ -138,7 +150,33 @@ Multi-agent environment with:
 - **Action Space**: Thrust magnitude [0,1], heading change [-1,1]
 - **Rewards**: +100 interception, -100 escape, distance/fuel penalties
 
-### 2. Detection Module
+### 2. ARSHI: Autonomous Resilient Sensing & Hive Intelligence
+
+The ARSHI system enables continued operation in contested electromagnetic environments where traditional sensors and communications are degraded or denied.
+
+**Opportunistic Sensor Suite** (6 unconventional modalities):
+| Sensor                    | Signal Source                  | Jamming Immunity |
+| ------------------------- | ------------------------------ | ---------------- |
+| Plasma Emission           | Hypersonic plasma sheath RF    | High             |
+| Acoustic Array            | Sonic boom triangulation       | Complete         |
+| Thermal Wake              | Atmospheric heating signatures | High             |
+| Magnetic Anomaly          | Metallic mass perturbations    | Complete         |
+| Passive Coherent Location | Ambient RF (cell/FM) scatter   | Medium           |
+| Swarm Proprioception      | Neighbor behavioral inference  | Complete         |
+
+**Distributed Belief System**:
+- Particle filter and Gaussian belief representations
+- Gossip-based belief propagation (works with 90%+ packet loss)
+- Covariance intersection for unknown correlations
+- Automatic belief decay for stale information
+
+**Operating Modes**:
+```
+FULL → DEGRADED → MINIMAL → PROPRIOCEPTIVE → ISOLATED
+```
+Automatic mode switching based on sensor/communication availability.
+
+### 3. Detection Module
 
 Multi-sensor fusion:
 - Kalman filtering for position tracking
@@ -146,7 +184,7 @@ Multi-sensor fusion:
 - Multi-target tracking with data association
 - RF and thermal sensor simulation
 
-### 3. Training Pipeline
+### 4. Training Pipeline
 
 RLlib-based MARL:
 - PPO algorithm with shared policy
@@ -154,7 +192,7 @@ RLlib-based MARL:
 - Distributed training with Ray
 - Automatic checkpointing
 
-### 4. Evaluation System
+### 5. Evaluation System
 
 Comprehensive metrics:
 - Interception rate
@@ -200,14 +238,55 @@ Training targets:
 ## Testing
 ```bash
 # Run all tests
-python tests/test_environment.py
-python tests/test_detection.py
-python tests/test_training_setup.py
-python tests/test_evaluation.py
-python tests/test_visualization.py
+pytest tests/ -v
+
+# Or run individual test modules
+python -m pytest tests/test_environment.py
+python -m pytest tests/test_arshi.py      # ARSHI resilient sensing (33 tests)
+python -m pytest tests/test_detection.py
+python -m pytest tests/test_training_setup.py
+python -m pytest tests/test_evaluation.py
+python -m pytest tests/test_visualization.py
 ```
 
 ## Technical Details
+
+### ARSHI Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    HIVE INTELLIGENCE ARCHITECTURE                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  LAYER 1: OPPORTUNISTIC SENSING                                     │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │
+│  │ Plasma  │ │ Acoustic│ │ Thermal │ │ Magnetic│ │  Swarm  │        │
+│  │   RF    │ │  Array  │ │  Wake   │ │ Anomaly │ │ Proprio │        │
+│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘        │
+│       └───────────┴─────┬─────┴───────────┴───────────┘             │
+│                         ▼                                           │
+│  LAYER 2: BAYESIAN BELIEF FUSION                                    │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  Per-agent probabilistic belief over threat location        │    │
+│  │  Particle filter / Gaussian with uncertainty quantification │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                         │                                           │
+│                         ▼                                           │
+│  LAYER 3: GOSSIP PROTOCOL (Comms-Resilient)                         │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  Epidemic-style belief sharing with covariance intersection │    │
+│  │  Works with 90%+ packet loss, no central coordinator        │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                         │                                           │
+│                         ▼                                           │
+│  LAYER 4: RESILIENT GNN COORDINATION                                │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  Degradation-aware message passing with edge reliability    │    │
+│  │  Isolation detection and self-fallback mechanisms           │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 ### Physics Model
 
@@ -243,12 +322,15 @@ else:
 - [X] Attention mechanisms for dynamic graphs
 - [X] Adversarial training (red team evasion)
 
-### Phase 3: Realism
+### Phase 3: Resilient Operations (ARSHI)
 
+- [X] Opportunistic multi-modal sensing (plasma, acoustic, thermal, magnetic, PCL)
+- [X] Swarm proprioception (behavioral inference)
+- [X] Gossip-based belief propagation
+- [X] Degradation-aware GNN communication
+- [X] Automatic mode switching (FULL → ISOLATED)
 - [ ] 3D environment
 - [ ] Evasive target maneuvers
-- [ ] GPS-denied navigation
-- [ ] Communication jamming
 - [ ] Hardware-in-the-loop testing
 
 ### Phase 4: Deployment
@@ -256,6 +338,7 @@ else:
 - [ ] Edge AI optimization (quantization)
 - [ ] Real-time constraints (<100ms)
 - [ ] Kubernetes deployment
+- [ ] Digital twin integration
 - [ ] Federated learning for secure training
 
 ## Applications
@@ -268,7 +351,7 @@ else:
 
 ## License
 
-MIT License - see LICENSE file for details
+GNU GENERAL PUBLIC LICENSE - see LICENSE file for details
 
 ## Acknowledgments
 
@@ -279,10 +362,9 @@ Built on:
 - Streamlit (dashboard)
 
 Inspired by prior portfolio projects:
-- SENTINEL: Multi-INT early warning platform
+- SENTINEL: Multi-Intelligence early warning platform
 - CONSTELLATION: Satellite fleet health management
 - MERIDIAN: Portfolio optimization system
-
 
 ## Contributing
 
@@ -291,15 +373,17 @@ This is a portfolio project. For questions or collaboration:
 **Michael Gurule**
 Data Scientist | Machine Learning Engineer
 
-- [![Email Me](https://img.shields.io/badge/EMAIL-8A2BE2)](michaelgurule1164@gmail.com)
-- [![LinkedIn](https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff)](www.linkedin.com/in/michael-j-gurule-447aa2134)
-- [![Medium](https://img.shields.io/badge/Medium-%23000000.svg?logo=medium&logoColor=white)](https://medium.com/@michaelgurule1164)
+[![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](michaelgurule1164@gmail.com)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](www.linkedin.com/in/michael-j-gurule-447aa2134)
+[![Medium](https://img.shields.io/badge/Medium-12100E?style=for-the-badge&logo=medium&logoColor=white)](https://medium.com/@michaelgurule1164)
 
 ---
 
-
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/9ea594f2-b109-41e0-911a-a2c894c5ad00" alt="HYPERION" width="40">
-  <br>
-  <sub>Built by Michael Gurule | Data: (Public)</sub>
+<sub>BUILT BY</sub> 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/ecb66c61-85c5-4d24-aaa3-99ddf2cd33cf" alt="MICHAEL GURULE">
+<p align="center">
+<b>Data Scientist | Machine Learning Engineer</b>
+<sub>HYPERION | Data: (Public)</sub>
 </p>
