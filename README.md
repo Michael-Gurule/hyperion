@@ -345,10 +345,7 @@ This is a portfolio project. For questions or collaboration:
 ---
 
 <p align="center">
-<sub>BUILT BY</sub> 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/ecb66c61-85c5-4d24-aaa3-99ddf2cd33cf" alt="MICHAEL GURULE">
-<p align="center">
-<b>Data Scientist | Machine Learning Engineer</b>
+  <img src="https://github.com/user-attachments/assets/0d69bf96-335b-4160-a202-780e8bad2d45" alt="MICHAEL GURULE">
+</p>
 <p align="center"><sub>HYPERION | Data: (Public)</sub>
 </p>
