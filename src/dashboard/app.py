@@ -47,6 +47,22 @@ def load_training_history(path: Path) -> Optional[Dict[str, List]]:
         return yaml.safe_load(f)
 
 
+def load_evaluation_results(path: Path) -> Optional[Dict]:
+    """Load evaluation results from JSON file."""
+    if not path.exists():
+        return None
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+def find_evaluation_files() -> List[Path]:
+    """Find all evaluation JSON files in outputs directory."""
+    outputs_dir = Path("outputs")
+    if not outputs_dir.exists():
+        return []
+    return sorted(outputs_dir.glob("*eval*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+
 def load_checkpoint_info(path: Path) -> Optional[Dict]:
     """Load checkpoint and extract metadata."""
     if not path.exists():
@@ -105,6 +121,7 @@ def main():
             "Select View",
             [
                 " Training Progress",
+                " Evaluation Results",
                 " Checkpoint Analysis",
                 " Live Simulation",
                 " Curriculum Metrics",
@@ -127,6 +144,8 @@ def main():
     # Main content based on selected page
     if page == " Training Progress":
         render_training_progress(checkpoints, selected_run)
+    elif page == " Evaluation Results":
+        render_evaluation_results()
     elif page == " Checkpoint Analysis":
         render_checkpoint_analysis(checkpoints, selected_run)
     elif page == " Live Simulation":
@@ -401,6 +420,213 @@ def render_training_progress(checkpoints: Dict, selected_run: Optional[str]):
 
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
+
+
+def render_evaluation_results():
+    """Render evaluation results page."""
+    st.header(" Evaluation Results")
+
+    eval_files = find_evaluation_files()
+
+    if not eval_files:
+        st.warning("No evaluation results found in outputs/ directory.")
+        st.info("Run evaluation with: `python -m src.evaluation.evaluate_checkpoint --checkpoint <path>`")
+        return
+
+    # File selector
+    selected_file = st.selectbox(
+        "Select Evaluation",
+        eval_files,
+        format_func=lambda p: f"{p.stem} ({datetime.fromtimestamp(p.stat().st_mtime).strftime('%Y-%m-%d %H:%M')})"
+    )
+
+    if not selected_file:
+        return
+
+    results = load_evaluation_results(selected_file)
+    if not results:
+        st.error("Failed to load evaluation results")
+        return
+
+    summary = results.get("summary", {})
+    episodes = results.get("episodes", [])
+
+    # Summary metrics
+    st.subheader("Summary Metrics")
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric(
+        "Interception Rate",
+        f"{summary.get('interception_rate', 0) * 100:.1f}%",
+        help="Percentage of episodes where target was intercepted"
+    )
+    col2.metric(
+        "Mean Reward",
+        f"{summary.get('mean_episode_reward', 0):.1f}",
+        help="Average episode reward"
+    )
+    col3.metric(
+        "Intercept Time",
+        f"{summary.get('mean_interception_time', 0):.2f}s" if summary.get('mean_interception_time') else "N/A",
+        help="Average time to intercept (successful episodes)"
+    )
+    col4.metric(
+        "Episodes",
+        summary.get('num_episodes', 0),
+        help="Total episodes evaluated"
+    )
+
+    # Second row of metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric(
+        "Escape Rate",
+        f"{summary.get('escape_rate', 0) * 100:.1f}%",
+        help="Percentage of episodes where target escaped"
+    )
+    col2.metric(
+        "Mean Episode Length",
+        f"{summary.get('mean_episode_length', 0):.1f}",
+        help="Average steps per episode"
+    )
+    col3.metric(
+        "Best Distance",
+        f"{summary.get('best_min_distance', 0):.1f}m",
+        help="Closest approach to target across all episodes"
+    )
+    col4.metric(
+        "Fuel Efficiency",
+        f"{summary.get('mean_fuel_efficiency', 0) * 100:.1f}%",
+        help="Average fuel remaining at episode end"
+    )
+
+    st.markdown("---")
+
+    # Visualizations
+    if episodes:
+        st.subheader("Episode Analysis")
+
+        tab1, tab2, tab3 = st.tabs(["Rewards", "Success Distribution", "Episode Details"])
+
+        with tab1:
+            # Reward distribution
+            rewards = [ep.get("total_reward", 0) for ep in episodes]
+            successes = [ep.get("intercepted", False) for ep in episodes]
+
+            fig = go.Figure()
+
+            # Color by success/failure
+            colors = ["green" if s else "red" for s in successes]
+
+            fig.add_trace(go.Bar(
+                x=list(range(1, len(rewards) + 1)),
+                y=rewards,
+                marker_color=colors,
+                name="Episode Reward",
+                hovertemplate="Episode %{x}<br>Reward: %{y:.1f}<extra></extra>"
+            ))
+
+            fig.update_layout(
+                title="Episode Rewards (Green=Success, Red=Failure)",
+                xaxis_title="Episode",
+                yaxis_title="Total Reward",
+                height=400
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        with tab2:
+            # Success pie chart and histogram
+            col1, col2 = st.columns(2)
+
+            with col1:
+                success_count = sum(1 for ep in episodes if ep.get("intercepted", False))
+                escape_count = sum(1 for ep in episodes if ep.get("target_escaped", False))
+                other_count = len(episodes) - success_count - escape_count
+
+                fig = go.Figure(data=[go.Pie(
+                    labels=["Intercepted", "Escaped", "Timeout"],
+                    values=[success_count, escape_count, other_count],
+                    marker_colors=["green", "red", "gray"],
+                    hole=0.4
+                )])
+                fig.update_layout(title="Episode Outcomes", height=350)
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                # Episode length histogram
+                lengths = [ep.get("steps", 0) for ep in episodes]
+
+                fig = go.Figure(data=[go.Histogram(
+                    x=lengths,
+                    nbinsx=20,
+                    marker_color="blue"
+                )])
+                fig.update_layout(
+                    title="Episode Length Distribution",
+                    xaxis_title="Steps",
+                    yaxis_title="Count",
+                    height=350
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+        with tab3:
+            # Episode details table
+            ep_df = pd.DataFrame([
+                {
+                    "Episode": ep.get("episode_id", i),
+                    "Steps": ep.get("steps", 0),
+                    "Reward": f"{ep.get('total_reward', 0):.1f}",
+                    "Intercepted": "Yes" if ep.get("intercepted", False) else "No",
+                    "Escaped": "Yes" if ep.get("target_escaped", False) else "No",
+                    "Min Distance": f"{ep.get('min_distance_to_target', float('inf')):.1f}m",
+                    "Intercept Time": f"{ep.get('interception_time', 0):.1f}s" if ep.get("interception_time") else "-",
+                }
+                for i, ep in enumerate(episodes)
+            ])
+
+            # Filter options
+            col1, col2 = st.columns(2)
+            with col1:
+                show_only = st.selectbox("Filter", ["All", "Successes Only", "Failures Only"])
+            with col2:
+                sort_by = st.selectbox("Sort By", ["Episode", "Reward", "Steps", "Min Distance"])
+
+            if show_only == "Successes Only":
+                ep_df = ep_df[ep_df["Intercepted"] == "Yes"]
+            elif show_only == "Failures Only":
+                ep_df = ep_df[ep_df["Intercepted"] == "No"]
+
+            if sort_by == "Reward":
+                ep_df = ep_df.sort_values("Reward", ascending=False, key=lambda x: x.str.replace(",", "").astype(float))
+            elif sort_by == "Steps":
+                ep_df = ep_df.sort_values("Steps", ascending=True)
+            elif sort_by == "Min Distance":
+                ep_df = ep_df.sort_values("Min Distance", ascending=True, key=lambda x: x.str.replace("m", "").astype(float))
+
+            st.dataframe(ep_df, use_container_width=True, hide_index=True, height=400)
+
+    # Compare evaluations
+    if len(eval_files) > 1:
+        st.markdown("---")
+        st.subheader("Compare Evaluations")
+
+        comparison_data = []
+        for eval_file in eval_files:
+            eval_results = load_evaluation_results(eval_file)
+            if eval_results and eval_results.get("summary"):
+                s = eval_results["summary"]
+                comparison_data.append({
+                    "Evaluation": eval_file.stem,
+                    "Date": datetime.fromtimestamp(eval_file.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+                    "Episodes": s.get("num_episodes", 0),
+                    "Success Rate": f"{s.get('interception_rate', 0) * 100:.1f}%",
+                    "Mean Reward": f"{s.get('mean_episode_reward', 0):.1f}",
+                    "Intercept Time": f"{s.get('mean_interception_time', 0):.2f}s" if s.get('mean_interception_time') else "N/A",
+                    "Best Distance": f"{s.get('best_min_distance', 0):.1f}m",
+                })
+
+        if comparison_data:
+            st.dataframe(pd.DataFrame(comparison_data), use_container_width=True, hide_index=True)
 
 
 def render_checkpoint_analysis(checkpoints: Dict, selected_run: Optional[str]):
