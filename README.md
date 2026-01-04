@@ -1,7 +1,7 @@
 <br>
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/96906e00-9e64-4399-b194-072cf22ab0bd" alt="HYPERION">
+<img width="600" alt="HYPERION" src="https://github.com/user-attachments/assets/6ae91cdd-dd78-403f-a506-df7f2e51f669" />
 <p align="center">
   <strong>AI-Driven Multi-Agent Swarm Intelligence for Hypersonic Defense</strong><br>
 </p>  
