@@ -30,7 +30,7 @@ set.cfg
 
 # -- Data -- 
 assets/
-docs/*
+docs/
 *.csv
 *.json
 *.xlsx
