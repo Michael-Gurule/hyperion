@@ -1,0 +1,77 @@
+# =============================================================================
+# HYPERION Docker Ignore
+# Excludes unnecessary files from Docker build context
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+env
+.eggs
+*.egg-info
+*.egg
+.pytest_cache
+.coverage
+htmlcov
+.tox
+.nox
+.hypothesis
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Development files
+.env
+.env.local
+*.log
+training_*.log
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Large files that should be mounted as volumes
+# Uncomment if you want to exclude from build:
+# checkpoints/
+# outputs/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Build artifacts
+build/
+dist/
+*.manifest
+*.spec
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
