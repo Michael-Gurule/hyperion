@@ -14,7 +14,7 @@ import yaml
 import logging
 import numpy as np
 from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from collections import defaultdict
 
@@ -44,6 +44,17 @@ from src.models.hierarchical_policy import (
     RoleType,
 )
 from src.utils.logger import setup_logger
+from src.utils.versioning import (
+    create_run_metadata,
+    create_checkpoint_metadata,
+    save_run_metadata,
+    save_checkpoint_metadata,
+    ModelRegistry,
+)
+from src.utils.experiment_tracker import (
+    ExperimentTracker,
+    TrackerConfig,
+)
 
 
 logger = setup_logger("hyperion_enhanced_training")
@@ -154,19 +165,47 @@ def create_enhanced_env(
     )
 
 
-def train_enhanced(config: EnhancedTrainingConfig) -> Dict[str, Any]:
+def train_enhanced(
+    config: EnhancedTrainingConfig,
+    tracker_config: Optional[TrackerConfig] = None,
+    run_name: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Train with all enhanced components.
 
     Args:
         config: Training configuration
+        tracker_config: Optional experiment tracker configuration
+        run_name: Optional custom run name
 
     Returns:
         Training history
     """
+    # Initialize versioning and tracking
+    model_type = "hierarchical" if config.use_hierarchical else "mappo"
+    run_metadata = create_run_metadata(
+        config=asdict(config),
+        run_name=run_name,
+        model_type=model_type,
+        algorithm="HierarchicalMAPPO" if config.use_hierarchical else "MAPPO",
+        device=config.device,
+    )
+
+    # Initialize experiment tracker
+    tracker = ExperimentTracker(tracker_config or TrackerConfig())
+    tracker.init_run(run_metadata, asdict(config))
+
+    # Initialize model registry
+    registry = ModelRegistry()
+    registry.register_run(run_metadata)
+
     logger.info("=" * 60)
     logger.info("HYPERION Enhanced Training")
     logger.info("=" * 60)
+    logger.info(f"Run ID: {run_metadata.run_id}")
+    logger.info(f"Run Name: {run_metadata.run_name}")
+    logger.info(f"Git Commit: {run_metadata.git_commit or 'unknown'}")
+    logger.info(f"Config Hash: {run_metadata.config_hash}")
     logger.info(f"Device: {config.device}")
     logger.info(f"Projectiles: {config.use_projectiles}")
     logger.info(f"Hierarchical policies: {config.use_hierarchical}")
@@ -175,6 +214,9 @@ def train_enhanced(config: EnhancedTrainingConfig) -> Dict[str, Any]:
     logger.info("=" * 60)
 
     os.makedirs(config.checkpoint_dir, exist_ok=True)
+
+    # Save run metadata to checkpoint directory
+    save_run_metadata(run_metadata, config.checkpoint_dir)
 
     # Setup curriculum
     curriculum = None
@@ -396,6 +438,19 @@ def train_enhanced(config: EnhancedTrainingConfig) -> Dict[str, Any]:
                         f"{stage_info}{role_info}"
                     )
 
+                    # Log metrics to experiment tracker
+                    tracker.log_metrics(
+                        {
+                            "episode_reward": float(mean_reward),
+                            "success_rate": float(mean_success),
+                            "overall_success_rate": float(overall_success),
+                            "episode_length": float(np.mean(history["episode_length"][-config.log_interval:])),
+                            "intrinsic_reward": float(np.mean(history["intrinsic_reward"][-config.log_interval:])) if history["intrinsic_reward"] else 0.0,
+                            "curriculum_stage": float(curriculum.current_stage_idx) if curriculum else 0.0,
+                        },
+                        step=timesteps,
+                    )
+
                 # Reset for new episode
                 observations, _ = env.reset()
                 if intrinsic_calculator:
@@ -442,6 +497,24 @@ def train_enhanced(config: EnhancedTrainingConfig) -> Dict[str, Any]:
             mean_reward = np.mean(recent_rewards)
             mean_success = np.mean(recent_success)
 
+            # Create and save checkpoint metadata
+            ckpt_metrics = {
+                "success_rate": float(mean_success),
+                "mean_reward": float(mean_reward),
+                "overall_success_rate": float(total_successes / episodes),
+            }
+            ckpt_metadata = create_checkpoint_metadata(
+                run_metadata=run_metadata,
+                checkpoint_type="episode",
+                episode=episodes,
+                timestep=timesteps,
+                metrics=ckpt_metrics,
+                file_path=checkpoint_path,
+            )
+            save_checkpoint_metadata(ckpt_metadata, checkpoint_path)
+            registry.register_checkpoint(ckpt_metadata)
+            tracker.log_checkpoint(ckpt_metadata)
+
             if mean_success > best_success_rate or (mean_success == best_success_rate and mean_reward > best_reward):
                 best_success_rate = mean_success
                 best_reward = mean_reward
@@ -449,27 +522,65 @@ def train_enhanced(config: EnhancedTrainingConfig) -> Dict[str, Any]:
                 trainer.save(best_path)
                 logger.info(f"New best model: success={mean_success:.1%}, reward={mean_reward:.2f}")
 
+                # Save best checkpoint metadata
+                best_ckpt_metadata = create_checkpoint_metadata(
+                    run_metadata=run_metadata,
+                    checkpoint_type="best",
+                    episode=episodes,
+                    timestep=timesteps,
+                    metrics=ckpt_metrics,
+                    file_path=best_path,
+                )
+                save_checkpoint_metadata(best_ckpt_metadata, best_path)
+                registry.register_checkpoint(best_ckpt_metadata)
+
     # Final save
     final_path = os.path.join(config.checkpoint_dir, "enhanced_final.pt")
     trainer.save(final_path)
+
+    # Save final checkpoint metadata
+    final_metrics = {
+        "success_rate": float(best_success_rate),
+        "mean_reward": float(best_reward),
+        "overall_success_rate": float(total_successes / max(episodes, 1)),
+        "total_episodes": float(episodes),
+        "total_timesteps": float(timesteps),
+    }
+    final_ckpt_metadata = create_checkpoint_metadata(
+        run_metadata=run_metadata,
+        checkpoint_type="final",
+        episode=episodes,
+        timestep=timesteps,
+        metrics=final_metrics,
+        file_path=final_path,
+    )
+    save_checkpoint_metadata(final_ckpt_metadata, final_path)
+    registry.register_checkpoint(final_ckpt_metadata)
 
     # Save training history
     history_path = os.path.join(config.checkpoint_dir, "training_history.yaml")
     with open(history_path, "w") as f:
         yaml.dump({k: [float(v) for v in vals] for k, vals in history.items()}, f)
 
+    # Update run status
+    registry.update_run_status(run_metadata.run_id, "completed")
+    tracker.finish(status="completed")
+
     # Final summary
     logger.info("\n" + "=" * 60)
     logger.info("Training Complete!")
     logger.info("=" * 60)
+    logger.info(f"Run ID: {run_metadata.run_id}")
+    logger.info(f"Run Name: {run_metadata.run_name}")
     logger.info(f"Total episodes: {episodes}")
     logger.info(f"Total timesteps: {timesteps:,}")
-    logger.info(f"Final success rate: {total_successes / episodes:.1%}")
+    logger.info(f"Final success rate: {total_successes / max(episodes, 1):.1%}")
     logger.info(f"Best success rate: {best_success_rate:.1%}")
     if curriculum:
         logger.info(f"Final curriculum stage: {curriculum.stage_name}")
         logger.info(f"Stage transitions: {len(curriculum.stage_history)}")
     logger.info(f"Checkpoints saved to: {config.checkpoint_dir}")
+    logger.info(f"Registry updated: {registry.registry_path}")
     logger.info("=" * 60)
 
     return dict(history)
@@ -489,6 +600,14 @@ def main():
     parser.add_argument("--no-curriculum", action="store_true", help="Disable curriculum")
     parser.add_argument("--device", type=str, default=None, help="Device (cuda/mps/cpu)")
 
+    # Versioning and tracking arguments
+    parser.add_argument("--run-name", type=str, default=None, help="Custom run name")
+    parser.add_argument("--tensorboard", action="store_true", help="Enable TensorBoard logging")
+    parser.add_argument("--wandb", action="store_true", help="Enable Weights & Biases logging")
+    parser.add_argument("--wandb-project", type=str, default="hyperion", help="W&B project name")
+    parser.add_argument("--mlflow", action="store_true", help="Enable MLflow logging")
+    parser.add_argument("--log-dir", type=str, default="./logs", help="Log directory")
+
     args = parser.parse_args()
 
     # Build config
@@ -505,8 +624,17 @@ def main():
     if args.device:
         config.device = args.device
 
+    # Build tracker config
+    tracker_config = TrackerConfig(
+        log_dir=args.log_dir,
+        use_tensorboard=args.tensorboard,
+        use_wandb=args.wandb,
+        wandb_project=args.wandb_project,
+        use_mlflow=args.mlflow,
+    )
+
     # Run training
-    history = train_enhanced(config)
+    history = train_enhanced(config, tracker_config=tracker_config, run_name=args.run_name)
 
     return history
 

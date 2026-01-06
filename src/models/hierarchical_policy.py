@@ -880,12 +880,28 @@ class HierarchicalMAPPO:
 
         return advantages, returns
 
-    def save(self, path: str):
-        """Save model."""
+    def save(self, path: str, metadata: Optional[Dict[str, Any]] = None):
+        """
+        Save model with metadata.
+
+        Args:
+            path: Path to save checkpoint
+            metadata: Optional metadata dict (run_id, git_commit, etc.)
+        """
         torch.save({
             "policy_state_dict": self.policy.state_dict(),
             "manager_optimizer": self.manager_optimizer.state_dict(),
             "worker_optimizer": self.worker_optimizer.state_dict(),
+            # Model architecture info for reproducibility
+            "model_info": {
+                "obs_dim": self.obs_dim,
+                "action_dim": self.action_dim,
+                "num_agents": self.num_agents,
+                "model_type": "hierarchical",
+            },
+            "config": self.config,
+            # Optional metadata from versioning system
+            "metadata": metadata or {},
         }, path)
 
     def load(self, path: str):

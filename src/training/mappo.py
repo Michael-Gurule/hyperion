@@ -759,8 +759,14 @@ class MAPPO:
             values = self.critic(batch_obs, global_context)
             return values
 
-    def save(self, path: str):
-        """Save model checkpoints."""
+    def save(self, path: str, metadata: Optional[Dict[str, Any]] = None):
+        """
+        Save model checkpoints with metadata.
+
+        Args:
+            path: Path to save checkpoint
+            metadata: Optional metadata dict (run_id, git_commit, etc.)
+        """
         checkpoint = {
             "actors": {k: v.state_dict() for k, v in self.actors.items()},
             "critic": self.critic.state_dict(),
@@ -769,6 +775,15 @@ class MAPPO:
             "entropy_coeff": self.entropy_coeff,
             "training_step": self.training_step,
             "config": self.config,
+            # Model architecture info for reproducibility
+            "model_info": {
+                "obs_dim": self.obs_dim,
+                "action_dim": self.action_dim,
+                "num_agents": self.num_agents,
+                "model_type": "mappo",
+            },
+            # Optional metadata from versioning system
+            "metadata": metadata or {},
         }
         torch.save(checkpoint, path)
 
