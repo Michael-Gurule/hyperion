@@ -34,12 +34,12 @@ tqdm>=4.66.0
 # Testing and Quality
 pytest>=7.4.0
 pytest-cov>=4.1.0
-black>=23.10.0
-flake8>=6.1.0
+
 
 # Explainability
 shap>=0.43.0
 
 # Logging and Monitoring
-tensorboard>=2.14.0
+hydra-core>=1.4.0
 wandb>=0.15.0
+dvc>=2.45.0    

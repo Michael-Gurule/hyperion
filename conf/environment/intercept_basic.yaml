@@ -1,0 +1,35 @@
+# conf/environment/intercept_basic.yaml
+
+# The Basic 5 vs 1 Intercept Scenario
+name: "intercept_basic"
+
+num_agents: 5
+max_steps: 500
+arena_size: 10000.0 # meters
+
+target:
+  speed: 1700.0 # Mach 5
+
+agent:
+  max_speed: 300.0
+  max_accel: 50.0
+  max_turn_rate: 0.785
+
+  # Sensor Fusion parameters
+  detection_range: 2000.0
+  intercept_range: 50.0
+  communication_range: 1500.0
+
+  initial_fuel: 1.0
+  fuel_consumption_rate: 0.001
+
+physics:
+  dt: 0.1
+
+# Adversarial Settings (Default to OFF for basic training)
+adversarial:
+  enabled: false
+  evasive_maneuvers: true
+  evasion_probability: 0.3
+  jamming_enabled: true
+  jamming_probability: 0.1

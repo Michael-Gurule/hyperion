@@ -1,0 +1,35 @@
+# conf/main.yaml
+defaults:
+  - _self_
+  - environment: intercept_basic 
+  - agent: ppo_independent 
+  - curriculum: linear_stages 
+  - hardware: local_mac 
+  - override hydra/job_logging: disabled 
+  
+
+# Global Project Metadata
+project_name: "HYPERION"
+
+#Generates a unique name for run
+# Example: 2026-01-09_PPO_5-agents
+experiment_name: "${now:%Y-%m-%d}_${agent.algorithm}_${environment.num_agents}-agents"
+
+# Evaluation Parameters
+evaluation:
+  episodes: 100
+  metrics:
+    - interception_rate
+    - mean_episode_reward
+    - mean_fuel_efficiency
+    - mean_time_to_intercept
+    - collision_rate
+
+# Visuals
+visualization:
+  render_mode: null
+  save_animations: false
+
+hydra:
+  job:
+    chdir: True 

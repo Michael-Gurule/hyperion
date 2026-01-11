@@ -10,7 +10,52 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg?style=for-the-badge)](https://www.python.org/downloads/)
 [![GPLv3.0](https://img.shields.io/badge/GPL--3.0-red?style=for-the-badge)](https://choosealicense.com/licenses/gpl-3.0/)
 
-HYPERION is a sophisticated machine learning platform designed to simulate and optimize autonomous drone swarms for the detection, tracking, and interception of hypersonic and sub hypersonic threats in aerospace and defense scenarios. The system leverages Multi-Agent Reinforcement Learning (MARL) to enable decentralized coordination among UAVs in high-stakes, dynamic environments.
+HYPERION is a sophisticated Multi-Agent Reinforcement Learning (MARL) framework designed to simulate and optimize autonomous drone swarms for the detection, tracking, and interception of hypersonic and sub hypersonic threats in aerospace and defense scenarios. The system leverages Multi-Agent Reinforcement Learning (MARL) to enable decentralized coordination among UAVs in high-stakes, dynamic environments.
+
+## 🏗️ MLOps Architecture (v2.0)
+
+This project has been re-architected to follow industry-standard MLOps practices, ensuring reproducibility, scalability, and clean separation of concerns.
+
+| Component | Tool | Description |
+| :--- | :--- | :--- |
+| **Configuration** | **Hydra** | Compositional, hierarchical config management. Experiments are reproducible via config snapshots. |
+| **Tracking** | **Weights & Biases** | Live metrics logging (Reward, Loss, Success Rate), system monitoring, and model artifact versioning. |
+| **Data Lineage** | **DVC** | Version control for large simulation assets (maps, physics tables) and training datasets. |
+| **Orchestration** | **Python/Bash** | Modular training loop decoupled from environment logic and agent architecture. |
+
+### Directory Structure
+
+```text
+HYPERION/
+├── conf/                # Hydra configuration (Experiment definitions)
+├── data/                # DVC-tracked assets
+├── src/
+│   ├── env/             # Physics engine & Scaled Environment
+│   └── models/          # MARL Agents (MAPPO, Hierarchical), GNNs, Sensors
+├── experiments/         # Lab notebook & hypothesis logs
+├── train.py             # Main entry point (Hydra-wrapped)
+└── ...
+
+**🧪 Experimentation Workflow**
+
+HYPERION follows a rigorous "Scientific Method" workflow for feature integration:
+
+1. Baseline Establishment: A controlled run (Tag: baseline) establishes the "Control Group" performance.
+2. Hypothesis Formulation: Features are developed to address specific failure modes (e.g., "Intrinsic rewards will reduce tail-chasing").
+3. A/B Testing: The "Treatment Group" is trained with the new feature active.Verification: Success is measured via W&B metrics (success_rate, interception_efficiency).
+
+| Feature Implementation Status                                                                             |
+| Feature              | Status        | DescriptionScaled                                                  |
+| -------------------- | ------------- | ------------------------------------------------------------------ |
+|: Swarm Env           | ✅ Active     | 50-100 agent environment with ISA atmosphere & projectile physics  |
+|: Curriculum Learning | ✅ Active     | 4-stage difficulty progression (Ballistic $\to$ Evasive)           |
+|: MAPPO Agent         | ✅ Active     | Centralized Critic PPO for homogeneous swarms                      | 
+|: Intrinsic Rewards   | ⚠️ In Testing | Anti-trailing penalties & novelty search (Exp: EXP-001)            |
+|: Swarm GNN           | ⏳ Planned    | Graph Neural Networks for emergent communication                   | 
+|: Sensor Fusion       | ⏳ Planned    | Kalman Filtering & Multi-modal signal processing                   | 
+|: ARSHI Resilience    | ⏳ Planned    | Autonomous degradation handling under failure                      |
+
+
 
 ## Key Features
 
@@ -34,110 +79,38 @@ Hypersonic weapons represent a critical challenge in modern defense, with nation
 - Providing measurable outcomes (>85% interception target in simulations)
 - Including adversarial robustness and explainable AI for human oversight
 
-## Installation
-
-### Prerequisites
-
-- Python 3.10 or higher
-- Conda (recommended) or pip
-- 16GB+ RAM for training
-
-### Setup
-```bash
-# Clone repository
-git clone https://github.com/yourusername/hyperion.git
-cd hyperion
-
-# Create conda environment
-conda create -n hyperion python=3.10 -y
-conda activate hyperion
-
-# Install dependencies
-conda-forge install -r requirements.txt
-# or pip install -r requirements.txt
-``` 
-
 ## Quick Start
 
-### 1. Test Environment
+### Setup
+
+1. Installation
+```
+Bash
+#Clone and Install Dependencies
+git clone [https://github.com/michael-gurule/hyperion.git](https://github.com/michael-gurule/hyperion.git)
+cd hyperion
+
+conda-forge install -r requirements.txt
+# or pip install -r requirements.txt
+```
+
+2. Run the Baseline (Control Group)
+Launch a standard training run with 50 agents to verify system performance.
+
 ```bash
-# Run environment tests
-python tests/test_environment.py
+python train.py environment.num_agents=50 experiment_name="baseline-control"
+```
+3. Run an Experiment (Hydra Override)
+Test a specific hypothesis (e.g., changing learning rate or enabling intrinsics) without modifying code.
 
-# Test visualization
-python tests/test_visualization.py
+``` 
+train.py agent.hyperparameters.lr=0.0005 +experiment=hypersonic_swarm
 ```
 
-### 2. Launch Dashboard
-```bash
-# Start interactive dashboard
-streamlit run src/dashboard/app.py
-```
-The dashboard provides:
-- Live swarm simulation with pursuit policy
-- Multi-episode evaluation
-- Performance metrics and analysis
-- Saved results visualization
-
-### 3. Run Training (Optional)
-```bash
-# Train swarm coordination policy
-python src/training/train_marl.py --iterations 100
-
-# Or use custom config
-python src/training/train_marl.py --config config.yaml --iterations 500
-```
-
-### 4. Evaluate Policy
-```bash
-# Evaluate trained policy
-python -c "
-from src.env.hypersonic_swarm_env import HypersonicSwarmEnv
-from src.evaluation.metrics import evaluate_policy
-
-env = HypersonicSwarmEnv(num_agents=5)
-metrics = evaluate_policy(env, policy=None, num_episodes=100)
-"
-```
-
-## Project Structure
-```
-hyperion/
-├── src/
-│   ├── env/                    # Environment implementation
-│   │   ├── hypersonic_swarm_env.py
-│   │   ├── scaled_environment.py
-│   │   ├── physics_models.py
-│   │   ├── projectile_system.py
-│   │   ├── visualization.py
-│   │   └── rllib_wrapper.py
-│   ├── models/                 # ML models
-│   │   ├── arshi.py            # ARSHI integration module
-│   │   ├── opportunistic_sensors.py  # Multi-modal degraded ops sensors
-│   │   ├── belief_system.py    # Distributed Bayesian belief + gossip
-│   │   ├── resilient_gnn.py    # Degradation-aware GNN communication
-│   │   ├── gnn_communication.py
-│   │   ├── hierarchical_policy.py
-│   │   ├── detection.py        # Sensor fusion and threat detection
-│   │   └── adaptive_sensor_fusion.py
-│   ├── training/               # Training pipeline
-│   │   ├── train_marl.py
-│   │   ├── train_enhanced.py
-│   │   └── curriculum.py
-│   ├── evaluation/             # Evaluation metrics
-│   │   └── metrics.py
-│   ├── dashboard/              # Streamlit dashboard
-│   │   └── app.py
-│   └── utils/                  # Utilities
-│       ├── config_loader.py
-│       └── logger.py
-├── tests/                      # Test suite (90%+ coverage)
-├── outputs/                    # Generated outputs
-├── checkpoints/                # Model checkpoints
-├── config.yaml                 # Configuration
-├── requirements.txt
-└── README.md
-```
+📊 Results & Artifacts
+All training metrics, system logs, and model checkpoints are automatically synced to the Weights & Biases Dashboard.
+Baseline Success Rate: ~30% (Stage 1)
+Target Interception: < 15s (Average)
 
 ## Core Components
 
@@ -155,6 +128,7 @@ Multi-agent environment with:
 The ARSHI system enables continued operation in contested electromagnetic environments where traditional sensors and communications are degraded or denied.
 
 **Opportunistic Sensor Suite** (6 unconventional modalities):
+
 | Sensor                    | Signal Source                  | Jamming Immunity |
 | ------------------------- | ------------------------------ | ---------------- |
 | Plasma Emission           | Hypersonic plasma sheath RF    | High             |
@@ -199,7 +173,7 @@ Comprehensive metrics:
 - Episode length and rewards
 - Fuel efficiency
 - Minimum distance to target
-- JSON export for analysis
+- W&B Reports for analysis
 
 ## Configuration
 
@@ -225,17 +199,17 @@ curriculum:
 
 ## Performance Benchmarks
 
-Random policy baseline (10 episodes):
-- Interception Rate: ~0-10%
-- Mean Episode Length: ~200 steps
-- Mean Episode Reward: -50 to -100
+Random policy baseline (X episodes):
+- Interception Rate: 
+- Mean Episode Length: 
+- Mean Episode Reward:
 
 Training targets:
-- Interception Rate: >85%
-- Decision Latency: <100ms
-- GPS-denied operation: Functional
+- Interception Rate: 
+- Decision Latency: 
+- GPS-denied operation:
 
-## Testing
+## System Testing
 ```bash
 # Run all tests
 pytest tests/ -v
@@ -281,34 +255,6 @@ else:
     reward = -distance_penalty - fuel_penalty + formation_bonus
 ```
 
-## Future Enhancements
-
-### Phase 2: Advanced ML
-
-- [X] Graph Neural Networks for agent communication
-- [X] MAPPO or QMIX for value decomposition
-- [X] Attention mechanisms for dynamic graphs
-- [X] Adversarial training (red team evasion)
-
-### Phase 3: Resilient Operations (ARSHI)
-
-- [X] Opportunistic multi-modal sensing (plasma, acoustic, thermal, magnetic, PCL)
-- [X] Swarm proprioception (behavioral inference)
-- [X] Gossip-based belief propagation
-- [X] Degradation-aware GNN communication
-- [X] Automatic mode switching (FULL → ISOLATED)
-- [ ] 3D environment
-- [ ] Evasive target maneuvers
-- [ ] Hardware-in-the-loop testing
-
-### Phase 4: Deployment
-
-- [ ] Edge AI optimization (quantization)
-- [ ] Real-time constraints (<100ms)
-- [ ] Kubernetes deployment
-- [ ] Digital twin integration
-- [ ] Federated learning for secure training
-
 ## Applications
 
 - Defense contractor demonstrations
@@ -327,7 +273,6 @@ Built on:
 - PettingZoo (multi-agent environments)
 - RLlib (reinforcement learning)
 - PyTorch (neural networks)
-- Streamlit (dashboard)
 
 Inspired by prior portfolio projects:
 - SENTINEL: Multi-Intelligence early warning platform
@@ -344,8 +289,3 @@ This is a portfolio project. For questions or collaboration:
 
 ---
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/0d69bf96-335b-4160-a202-780e8bad2d45" alt="MICHAEL GURULE">
-</p>
-<p align="center"><sub>HYPERION | Data: (Public)</sub>
-</p>

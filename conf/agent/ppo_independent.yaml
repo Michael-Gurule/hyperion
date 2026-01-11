@@ -1,0 +1,18 @@
+# conf/agent/ppo_independent.yaml
+name: "ppo_independent"
+algorithm: "PPO" # RLlib algorithm name
+
+hyperparameters:
+  lr: 0.0003
+  gamma: 0.99
+  lambda_gae: 0.95
+  clip_param: 0.2
+  vf_clip_param: 10.0
+  entropy_coeff: 0.01
+  num_sgd_iter: 10
+  sgd_minibatch_size: 128
+  train_batch_size: 4000
+
+multi_agent:
+  policy_mapping: "shared" # All agents share one brain (good for homogeneous swarms)
+  share_observations: false

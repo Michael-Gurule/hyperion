@@ -38,6 +38,13 @@ docs/
 *.sql
 *.sqlite
 
+#MLOps
+outputs/
+wandb/
+.wandb/
+*.pyc
+
+
 # -- Models & Heavy Binaries ---
 *.pkl
 *.joblib
