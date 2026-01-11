@@ -1,0 +1,18 @@
+# conf/curriculum/linear_stages.yaml
+enabled: true
+
+stages:
+  - name: "basic"
+    target_speed: 500.0 # Subsonic (Easy)
+    num_agents: 3
+    duration_episodes: 1000
+
+  - name: "intermediate"
+    target_speed: 1000.0 # Supersonic (Medium)
+    num_agents: 5
+    duration_episodes: 2000
+
+  - name: "advanced"
+    target_speed: 1700.0 # Hypersonic (Hard)
+    num_agents: 5
+    duration_episodes: 5000

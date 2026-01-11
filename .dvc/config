@@ -1,4 +1,4 @@
 [core]
     remote = localstorage
 ['remote "localstorage"']
-    url = /Users/michaelgurule/Volumes/CodeBase/HYPERION_DVC_STORAGE
+    url = /Volumes/CodeBase/HYPERION_DVC_STORAGE

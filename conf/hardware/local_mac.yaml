@@ -1,0 +1,15 @@
+# conf/hardware/local_mac.yaml
+name: "local_mac"
+device: "mps" # Use "mps" for Apple Silicon Macs; use "cpu" for Intel Macs
+
+# Keep num_gpus as 0 if using RLlib with MPS backend
+# If using custom PyTorch use cfg.hardware.device to set device
+num_gpus: 0
+num_workers: 4 # Parallel rollout workers
+num_envs_per_worker: 1
+rollout_fragment_length: 200
+
+checkpointing:
+  freq: 10
+  at_end: true
+  keep_num: 5

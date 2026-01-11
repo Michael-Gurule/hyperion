@@ -45,7 +45,6 @@ def create_env_from_hydra(cfg: DictConfig, curriculum=None) -> ScaledHypersonicS
         env_config = curriculum.get_env_config()
         adv_config = curriculum.get_adversarial_config()
     else:
-        # Fallback to defaults from yaml if no curriculum
         env_config = {
             "target_speed": cfg.environment.target.speed,
             "evasion_probability": 0.0,
@@ -54,7 +53,6 @@ def create_env_from_hydra(cfg: DictConfig, curriculum=None) -> ScaledHypersonicS
         adv_config = {"enabled": False}
 
     # 2. Build Adversarial Config
-    # Check if 'adversarial' exists in env config, otherwise default to False
     adv_enabled = cfg.environment.get("adversarial", {}).get("enabled", False)
 
     adversarial = AdversarialConfig(
@@ -66,14 +64,12 @@ def create_env_from_hydra(cfg: DictConfig, curriculum=None) -> ScaledHypersonicS
     )
 
     # 3. Build Reward Config
-    # We pull these from the yaml (you might want to add a 'rewards' section to env yaml later)
-    # For now, we use defaults or hardcoded values suitable for the scenario
     rewards = RewardConfig(
         intercept_reward=100.0,
         distance_scale=0.1,
         fuel_penalty=0.01,
         formation_bonus=0.5,
-        projectile_hit_bonus=50.0,  # Assuming enabled for now
+        projectile_hit_bonus=50.0,
         projectile_launch_cost=-0.5,
     )
 
@@ -115,8 +111,7 @@ def main(cfg: DictConfig):
     if cfg.curriculum.enabled:
         logger.info("📚 Initializing Curriculum Scheduler...")
         # Map YAML stages to the Curriculum Config object
-        # Note: We assume the linear_stages.yaml structure matches what the Scheduler expects
-        # or we initialize it with default logic for now to ensure it runs.
+
         curr_config = ParameterizedCurriculumConfig(
             agent_max_speed=cfg.environment.agent.max_speed,
             advancement_threshold=0.7,  # Defaulting for stability
@@ -136,7 +131,7 @@ def main(cfg: DictConfig):
 
     # C. Intrinsic Rewards
     intrinsic_calculator = None
-    # We default to True for "Enhanced" training, but you can add a toggle in main.yaml later
+    # Defaut to True for Base line; in practice, use cfg.intrinsic.enabled
     if True:
         logger.info("🧠 Initializing Intrinsic Motivation...")
         int_cfg = IntrinsicRewardConfig(
@@ -147,7 +142,6 @@ def main(cfg: DictConfig):
         intrinsic_calculator = IntrinsicRewardCalculator(config=int_cfg)
 
     # D. Agent / Policy (The "Brain")
-    # We select the class based on the 'agent' config name
     if cfg.agent.name == "mappo_gnn" or cfg.agent.get("use_hierarchical", False):
         logger.info("🤖 Loaded Hierarchical MAPPO Agent")
         policy_config = HierarchicalPolicyConfig(
@@ -218,8 +212,8 @@ def main(cfg: DictConfig):
                 # Intrinsic Reward Calculation
                 combined_rewards = rewards.copy()
                 if intrinsic_calculator and env.target_state:
-                    # (Simplified for brevity - assumes logic from enhanced script)
-                    # You would inject the intrinsic calculation loop here
+                    # (Simplified for baseline test- assumes logic from enhanced script)
+                    # Inject the intrinsic calculation loop here
                     pass
 
                 dones = {
@@ -290,7 +284,7 @@ def main(cfg: DictConfig):
 
             # Curriculum Update
             if curriculum:
-                # We assume a simple success metric for now (e.g., reward > 50)
+                # Assume a simple success metric for baseline test (e.g., reward > 50)
                 success = episode_reward > 50
                 res = curriculum.update(success, episode_reward)
                 if res["stage_changed"]:
