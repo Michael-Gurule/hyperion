@@ -27,8 +27,12 @@ set.cfg
 # --- Notebooks ---
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
+LAB_NOTES.md
 
-# -- Data -- 
+# Data (Handled by DVC)
+data/
+!data/*.dvc         # KEEP the .dvc files
+!data/*.yaml        # KEEP config files inside data
 assets/
 docs/
 *.csv
