@@ -196,6 +196,14 @@ def main(cfg: DictConfig):
 
             # --- Rollout ---
             for step in range(cfg.hardware.rollout_fragment_length):
+                # --- NaN Protection: Sanitize observations before policy forward pass ---
+                for agent_id, obs in list(observations.items()):
+                    if np.any(np.isnan(obs)) or np.any(np.isinf(obs)):
+                        logger.warning(
+                            f"Step {step}: NaN/Inf in obs for {agent_id}, replacing with zeros"
+                        )
+                        observations[agent_id] = np.zeros_like(obs)
+
                 # Action Selection
                 if hasattr(trainer, "select_actions"):
                     # Handle difference between Hierarchical (returns 4 items) and Standard (returns 3)
@@ -209,12 +217,80 @@ def main(cfg: DictConfig):
                 # Environment Step
                 next_obs, rewards, terminations, truncations, infos = env.step(actions)
 
+                # --- NaN Protection: Sanitize next_obs to prevent buffer corruption ---
+                for agent_id, obs in list(next_obs.items()):
+                    if np.any(np.isnan(obs)) or np.any(np.isinf(obs)):
+                        logger.warning(
+                            f"Step {step}: NaN/Inf in next_obs for {agent_id}, replacing with zeros"
+                        )
+                        next_obs[agent_id] = np.zeros_like(obs)
+
                 # Intrinsic Reward Calculation
                 combined_rewards = rewards.copy()
-                if intrinsic_calculator and env.target_state:
-                    # (Simplified for baseline test- assumes logic from enhanced script)
-                    # Inject the intrinsic calculation loop here
-                    pass
+                if intrinsic_calculator and env.target_state is not None:
+                    # 1. Get Target Data (Handle dictionary or array format for robustness)
+                    if isinstance(env.target_state, dict):
+                        t_pos = env.target_state.get("position", np.zeros(2))
+                        t_vel = env.target_state.get("velocity", np.zeros(2))
+                    else:
+                        # Fallback if target_state is just an array [x, y, vx, vy]
+                        t_pos = env.target_state[:2]
+                        t_vel = env.target_state[2:4]
+
+                    # 2. Loop through all active agents to calculate individual intrinsic rewards
+                    for agent_id, obs in observations.items():
+                        # Skip if agent is not in the reward dict (dead/done)
+                        if agent_id not in combined_rewards:
+                            continue
+
+                        # 3. Extract Agent State from Observation
+                        # Assumption: Obs is standard [x, y, vx, vy, ...]
+                        # We default to first 4 indices.
+                        a_pos = obs[:2]
+                        a_vel = obs[2:4]
+
+                        # Skip intrinsic calculation if observation contains NaN/Inf
+                        if np.any(np.isnan(obs)) or np.any(np.isinf(obs)):
+                            logger.warning(
+                                f"Skipping intrinsic reward for {agent_id}: invalid obs"
+                            )
+                            continue
+
+                        # 4. Compute the Intrinsic Reward
+                        # FIXED: Use 'compute_agent_reward' and explicit argument names
+                        intrinsic_reward, components = (
+                            intrinsic_calculator.compute_agent_reward(
+                                agent_id=agent_id,
+                                agent_position=a_pos,
+                                agent_velocity=a_vel,
+                                target_position=t_pos,
+                                target_velocity=t_vel,
+                                detection_range=2000.0,  # Default range
+                                include_novelty=True,  # Enable the curiosity bonus
+                            )
+                        )
+
+                        # 5. Add to Extrinsic Reward (Weighted)
+                        # Added 'combined_rewards' so the PPO agent optimizes for BOTH
+                        combined_rewards[agent_id] += intrinsic_reward
+
+                # --- NaN Protection: Sanitize rewards to prevent gradient corruption ---
+                nan_count = 0
+                for agent_id in list(combined_rewards.keys()):
+                    reward_val = combined_rewards[agent_id]
+                    if np.isnan(reward_val) or np.isinf(reward_val):
+                        nan_count += 1
+                        combined_rewards[agent_id] = 0.0
+                    else:
+                        # Clip extreme values to prevent exploding gradients
+                        combined_rewards[agent_id] = float(
+                            np.clip(reward_val, -100.0, 100.0)
+                        )
+
+                if nan_count > 0:
+                    logger.warning(
+                        f"Step {step}: Sanitized {nan_count} NaN/Inf rewards"
+                    )
 
                 dones = {
                     a: terminations.get(a, False) or truncations.get(a, False)
@@ -243,7 +319,7 @@ def main(cfg: DictConfig):
                             values,
                         )
 
-                episode_reward += np.mean(list(rewards.values()))
+                episode_reward += np.mean(list(combined_rewards.values()))
                 observations = next_obs
                 steps += 1
                 total_timesteps += len(observations)
