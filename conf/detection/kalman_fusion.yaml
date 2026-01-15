@@ -1,0 +1,17 @@
+# conf/detection/kalman_fusion.yaml
+
+# Sensor Fusion Detection Configuration
+name: "kalman_fusion"
+
+enabled: true
+
+# Kalman Filter Parameters
+kalman:
+  state_dim: 4           # [x, y, vx, vy]
+  process_noise: 0.1     # Process noise covariance
+  measurement_noise: 1.0 # Measurement noise covariance
+
+# Simulated Sensor Noise
+sensor:
+  position_noise_std: 50.0  # meters of position uncertainty
+  dt: 0.1                   # Time step for prediction

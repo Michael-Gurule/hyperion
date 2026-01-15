@@ -6,6 +6,7 @@ import torch
 import numpy as np
 from collections import defaultdict
 import logging
+from tqdm import tqdm
 
 # Import Environment and Configs
 from src.env.scaled_environment import (
@@ -21,6 +22,9 @@ from src.models.intrinsic_rewards import (
     IntrinsicRewardConfig,
     IntrinsicRewardCalculator,
 )
+
+# Import Sensor Fusion Model
+from src.models.detection import SensorFusion
 
 # Import MAPPO
 from src.models.mappo import MAPPO, MAPPOConfig
@@ -141,7 +145,17 @@ def main(cfg: DictConfig):
         )
         intrinsic_calculator = IntrinsicRewardCalculator(config=int_cfg)
 
-    # D. Agent / Policy (The "Brain")
+    # E. Detection / Sensor Fusion
+    sensor_fusion = None
+    if cfg.detection.enabled:
+        logger.info("🎯 Initializing Sensor Fusion...")
+        sensor_fusion = SensorFusion(
+            state_dim=cfg.detection.kalman.state_dim,
+            process_noise=cfg.detection.kalman.process_noise,
+            measurement_noise=cfg.detection.kalman.measurement_noise,
+        )
+
+    # F. Agent / Policy (The "Brain")
     if cfg.agent.name == "mappo_gnn" or cfg.agent.get("use_hierarchical", False):
         logger.info("🤖 Loaded Hierarchical MAPPO Agent")
         policy_config = HierarchicalPolicyConfig(
@@ -184,14 +198,23 @@ def main(cfg: DictConfig):
     logger.info(f"💾 Checkpoints will save to: {ckpt_dir}")
 
     try:
+        pbar = tqdm(
+            total=cfg.evaluation.episodes,
+            desc="Training",
+            unit="ep",
+            dynamic_ncols=True,
+        )
         while (
             episodes < cfg.evaluation.episodes
         ):  # Using evaluation count for short test, usually total_timesteps
             observations, _ = env.reset()
             if intrinsic_calculator:
                 intrinsic_calculator.reset()
+            if sensor_fusion:
+                sensor_fusion.reset()
 
             episode_reward = 0
+            episode_detection_confidence = 0.0
             steps = 0
 
             # --- Rollout ---
@@ -209,12 +232,70 @@ def main(cfg: DictConfig):
                 # Environment Step
                 next_obs, rewards, terminations, truncations, infos = env.step(actions)
 
-                # Intrinsic Reward Calculation
+                # --- Sensor Fusion: Filter target position estimates ---
+                fused_target_pos = None
+                fused_target_vel = None
+                detection_confidence = 0.0
+
+                if sensor_fusion and env.target_state is not None:
+                    # Get raw target position from environment
+                    if isinstance(env.target_state, dict):
+                        raw_pos = env.target_state.get("position", np.zeros(2))
+                    else:
+                        raw_pos = env.target_state[:2]
+
+                    # Add measurement noise to simulate sensor uncertainty
+                    noise_std = cfg.detection.sensor.position_noise_std
+                    noisy_measurement = raw_pos + np.random.normal(0, noise_std, size=2)
+
+                    # Predict and update Kalman filter
+                    dt = cfg.detection.sensor.dt
+                    sensor_fusion.predict(dt)
+                    sensor_fusion.update(noisy_measurement)
+
+                    # Get filtered estimates
+                    fused_target_pos = sensor_fusion.get_position()
+                    fused_target_vel = sensor_fusion.get_velocity()
+
+                    # Compute confidence based on filter covariance
+                    position_uncertainty = np.sqrt(np.trace(sensor_fusion.P[:2, :2]))
+                    detection_confidence = max(0.0, 1.0 - position_uncertainty / 1000.0)
+
+                # --- Intrinsic Reward Calculation ---
                 combined_rewards = rewards.copy()
-                if intrinsic_calculator and env.target_state:
-                    # (Simplified for baseline test- assumes logic from enhanced script)
-                    # Inject the intrinsic calculation loop here
-                    pass
+                if intrinsic_calculator and env.target_state is not None:
+                    # Use fused target data if available, otherwise raw
+                    if fused_target_pos is not None and fused_target_vel is not None:
+                        t_pos = fused_target_pos
+                        t_vel = fused_target_vel
+                    elif isinstance(env.target_state, dict):
+                        t_pos = env.target_state.get("position", np.zeros(2))
+                        t_vel = env.target_state.get("velocity", np.zeros(2))
+                    else:
+                        t_pos = env.target_state[:2]
+                        t_vel = env.target_state[2:4]
+
+                    # Loop through agents for intrinsic reward calculation
+                    for agent_id, obs in observations.items():
+                        if agent_id not in combined_rewards:
+                            continue
+
+                        # Extract agent state from observation (first 4 values)
+                        a_pos = obs[:2]
+                        a_vel = obs[2:4]
+
+                        intrinsic_reward, components = (
+                            intrinsic_calculator.compute_agent_reward(
+                                agent_id=agent_id,
+                                agent_position=a_pos,
+                                agent_velocity=a_vel,
+                                target_position=t_pos,
+                                target_velocity=t_vel,
+                                detection_range=2000.0,
+                                include_novelty=True,
+                            )
+                        )
+                        combined_rewards[agent_id] += intrinsic_reward
 
                 dones = {
                     a: terminations.get(a, False) or truncations.get(a, False)
@@ -244,6 +325,7 @@ def main(cfg: DictConfig):
                         )
 
                 episode_reward += np.mean(list(rewards.values()))
+                episode_detection_confidence += detection_confidence
                 observations = next_obs
                 steps += 1
                 total_timesteps += len(observations)
@@ -264,6 +346,9 @@ def main(cfg: DictConfig):
                 update_stats = trainer.update(last_values)
 
                 # Log to W&B
+                avg_detection_confidence = (
+                    episode_detection_confidence / steps if steps > 0 else 0.0
+                )
                 wandb.log(
                     {
                         "reward/episode": episode_reward,
@@ -273,14 +358,17 @@ def main(cfg: DictConfig):
                         if curriculum
                         else 0,
                         "env/steps": total_timesteps,
+                        "detection/confidence": avg_detection_confidence,
                     }
                 )
 
             episodes += 1
-            if episodes % 10 == 0:
-                logger.info(
-                    f"Episode {episodes} | Reward: {episode_reward:.2f} | Stage: {curriculum.stage_name if curriculum else 'Default'}"
-                )
+            pbar.update(1)
+            pbar.set_postfix({
+                "reward": f"{episode_reward:.2f}",
+                "stage": curriculum.stage_name if curriculum else "Default",
+                "det_conf": f"{avg_detection_confidence:.2f}",
+            })
 
             # Curriculum Update
             if curriculum:
@@ -299,6 +387,8 @@ def main(cfg: DictConfig):
         raise e
 
     finally:
+        pbar.close()
+
         # Save Final Model
         if hasattr(trainer, "save"):
             final_path = "final_model.pt"

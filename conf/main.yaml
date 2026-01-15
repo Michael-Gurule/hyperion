@@ -1,10 +1,11 @@
 # conf/main.yaml
 defaults:
   - _self_
-  - environment: intercept_basic 
-  - agent: ppo_independent 
-  - curriculum: linear_stages 
-  - hardware: local_mac 
+  - environment: intercept_basic
+  - agent: ppo_independent
+  - curriculum: linear_stages
+  - hardware: local_mac
+  - detection: kalman_fusion
   - override hydra/job_logging: disabled 
   
 
