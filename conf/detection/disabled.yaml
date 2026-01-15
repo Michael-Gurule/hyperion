@@ -1,0 +1,16 @@
+# conf/detection/disabled.yaml
+
+# Detection Disabled (Control Group)
+name: "disabled"
+
+enabled: false
+
+# Placeholder values (not used when disabled)
+kalman:
+  state_dim: 4
+  process_noise: 0.1
+  measurement_noise: 1.0
+
+sensor:
+  position_noise_std: 50.0
+  dt: 0.1
