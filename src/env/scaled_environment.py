@@ -873,6 +873,7 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
 
         if to_target_dist > 1e-6 and target_speed > 1e-6:
             to_target_unit = to_target / to_target_dist
+            target_dir = target_vel / target_speed
             # Angle between approach direction and target's reverse direction
             approach_angle = np.arccos(np.clip(
                 np.dot(to_target_unit, -target_dir), -1, 1
@@ -890,8 +891,9 @@ class ScaledHypersonicSwarmEnv(ParallelEnv):
             # Bonus for good firing angle (perpendicular or head-on approach)
             if agent in self.agents_who_fired_this_step and to_target_dist > 1e-6:
                 if target_speed > 1e-6:
+                    target_dir_fire = target_vel / target_speed
                     firing_angle = np.arccos(np.clip(
-                        np.dot(to_target / to_target_dist, -target_dir), -1, 1
+                        np.dot(to_target / to_target_dist, -target_dir_fire), -1, 1
                     ))
                     # Better angle = more bonus (head-on is best)
                     if firing_angle > np.pi / 3:  # > 60 degrees from behind
