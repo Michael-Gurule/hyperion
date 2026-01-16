@@ -26,6 +26,9 @@ from src.models.intrinsic_rewards import (
 # Import Sensor Fusion Model
 from src.models.detection import SensorFusion
 
+# Import GNN Communication
+from src.models.gnn_communication import SwarmGNN, CoordinationHead
+
 # Import MAPPO
 from src.models.mappo import MAPPO, MAPPOConfig
 
@@ -155,7 +158,28 @@ def main(cfg: DictConfig):
             measurement_noise=cfg.detection.kalman.measurement_noise,
         )
 
-    # F. Agent / Policy (The "Brain")
+    # F. GNN Communication Layer
+    swarm_gnn = None
+    coordination_head = None
+    if cfg.communication.enabled:
+        logger.info("📡 Initializing GNN Communication Layer...")
+        swarm_gnn = SwarmGNN(
+            obs_dim=obs_dim,
+            hidden_dim=cfg.communication.gnn.hidden_dim,
+            embed_dim=cfg.communication.gnn.embed_dim,
+            num_gnn_layers=cfg.communication.gnn.num_layers,
+            heads=cfg.communication.gnn.heads,
+            dropout=cfg.communication.gnn.dropout,
+            communication_range=cfg.communication.graph.communication_range,
+        ).to(device)
+
+        coordination_head = CoordinationHead(
+            embed_dim=cfg.communication.gnn.embed_dim,
+            hidden_dim=cfg.communication.gnn.hidden_dim,
+            num_roles=cfg.communication.coordination.num_roles,
+        ).to(device)
+
+    # G. Agent / Policy (The "Brain")
     if cfg.agent.name == "mappo_gnn" or cfg.agent.get("use_hierarchical", False):
         logger.info("🤖 Loaded Hierarchical MAPPO Agent")
         policy_config = HierarchicalPolicyConfig(
@@ -215,6 +239,8 @@ def main(cfg: DictConfig):
 
             episode_reward = 0
             episode_detection_confidence = 0.0
+            episode_coordination_score = 0.0
+            gnn_role_distribution = None
             steps = 0
 
             # --- Rollout ---
@@ -226,6 +252,54 @@ def main(cfg: DictConfig):
                             f"Step {step}: NaN/Inf in obs for {agent_id}, replacing with zeros"
                         )
                         observations[agent_id] = np.zeros_like(obs)
+
+                # --- GNN Communication: Enhance observations with swarm context ---
+                coordination_score = 0.0
+
+                if swarm_gnn is not None:
+                    # Extract agent positions from environment
+                    agent_positions = []
+                    agent_obs_list = []
+                    agent_ids = list(observations.keys())
+
+                    for agent_id in agent_ids:
+                        obs = observations[agent_id]
+                        agent_obs_list.append(obs)
+                        # Positions are first 2 dims of observation (normalized)
+                        # Denormalize: obs[:2] * arena_size
+                        pos = obs[:2] * cfg.environment.arena_size
+                        agent_positions.append(pos)
+
+                    if len(agent_positions) > 0:
+                        # Convert to tensors
+                        obs_tensor = torch.tensor(
+                            np.array(agent_obs_list), dtype=torch.float32, device=device
+                        )
+                        pos_tensor = torch.tensor(
+                            np.array(agent_positions), dtype=torch.float32, device=device
+                        )
+
+                        # Forward through GNN
+                        with torch.no_grad():
+                            gnn_embeddings = swarm_gnn(obs_tensor, pos_tensor)
+
+                            # Get coordination metrics
+                            enhanced, role_probs, coord_score = coordination_head(
+                                gnn_embeddings,
+                                return_roles=cfg.communication.coordination.return_roles,
+                            )
+
+                            coordination_score = (
+                                coord_score.item()
+                                if coord_score.dim() == 0
+                                else coord_score.mean().item()
+                            )
+
+                            if role_probs is not None:
+                                # Track role distribution [scout, tracker, interceptor, support]
+                                gnn_role_distribution = role_probs.mean(dim=0).cpu().numpy()
+
+                episode_coordination_score += coordination_score
 
                 # Action Selection
                 if hasattr(trainer, "select_actions"):
@@ -268,29 +342,6 @@ def main(cfg: DictConfig):
                     # Compute confidence based on filter covariance
                     position_uncertainty = np.sqrt(np.trace(sensor_fusion.P[:2, :2]))
                     detection_confidence = max(0.0, 1.0 - position_uncertainty / 1000.0)
-
-                # --- Intrinsic Reward Calculation ---
-                combined_rewards = rewards.copy()
-                if intrinsic_calculator and env.target_state is not None:
-                    # Use fused target data if available, otherwise raw
-                    if fused_target_pos is not None and fused_target_vel is not None:
-                        t_pos = fused_target_pos
-                        t_vel = fused_target_vel
-                    elif isinstance(env.target_state, dict):
-                        t_pos = env.target_state.get("position", np.zeros(2))
-                        t_vel = env.target_state.get("velocity", np.zeros(2))
-                    else:
-                        t_pos = env.target_state[:2]
-                        t_vel = env.target_state[2:4]
-
-                    # Loop through agents for intrinsic reward calculation
-                    for agent_id, obs in observations.items():
-                        if agent_id not in combined_rewards:
-                            continue
-
-                        # Extract agent state from observation (first 4 values)
-                        a_pos = obs[:2]
-                        a_vel = obs[2:4]
 
                 # --- NaN Protection: Sanitize next_obs to prevent buffer corruption ---
                 for agent_id, obs in list(next_obs.items()):
@@ -344,14 +395,6 @@ def main(cfg: DictConfig):
                                 include_novelty=True,
                             )
                         )
-                        combined_rewards[agent_id] += intrinsic_reward
-                                detection_range=2000.0,  # Default range
-                                include_novelty=True,  # Enable the curiosity bonus
-                            )
-                        )
-
-                        # 5. Add to Extrinsic Reward (Weighted)
-                        # Added 'combined_rewards' so the PPO agent optimizes for BOTH
                         combined_rewards[agent_id] += intrinsic_reward
 
                 # --- NaN Protection: Sanitize rewards to prevent gradient corruption ---
@@ -425,6 +468,9 @@ def main(cfg: DictConfig):
                 avg_detection_confidence = (
                     episode_detection_confidence / steps if steps > 0 else 0.0
                 )
+                avg_coordination_score = (
+                    episode_coordination_score / steps if steps > 0 else 0.0
+                )
                 wandb.log(
                     {
                         "reward/episode": episode_reward,
@@ -435,8 +481,18 @@ def main(cfg: DictConfig):
                         else 0,
                         "env/steps": total_timesteps,
                         "detection/confidence": avg_detection_confidence,
+                        # GNN Communication Metrics
+                        "gnn/coordination_score": avg_coordination_score,
+                        "gnn/enabled": 1.0 if swarm_gnn is not None else 0.0,
                     }
                 )
+
+                # Log role distribution if available
+                if gnn_role_distribution is not None:
+                    role_names = ["scout", "tracker", "interceptor", "support"]
+                    for i, role_name in enumerate(role_names):
+                        if i < len(gnn_role_distribution):
+                            wandb.log({f"gnn/role_{role_name}": float(gnn_role_distribution[i])})
 
             episodes += 1
             pbar.update(1)
@@ -444,6 +500,7 @@ def main(cfg: DictConfig):
                 "reward": f"{episode_reward:.2f}",
                 "stage": curriculum.stage_name if curriculum else "Default",
                 "det_conf": f"{avg_detection_confidence:.2f}",
+                "coord": f"{avg_coordination_score:.2f}" if swarm_gnn else "N/A",
             })
 
             # Curriculum Update

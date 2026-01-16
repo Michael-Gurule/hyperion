@@ -1,0 +1,24 @@
+# conf/communication/gnn_enabled.yaml
+
+# GNN Communication Configuration (Treatment Group)
+name: "gnn_enabled"
+
+enabled: true
+
+# GNN Architecture
+gnn:
+  hidden_dim: 128
+  embed_dim: 64
+  num_layers: 3
+  heads: 4
+  dropout: 0.1
+
+# Communication Graph
+graph:
+  communication_range: 1500.0  # meters
+  max_neighbors: 10            # limit edges per node
+
+# Coordination
+coordination:
+  num_roles: 4  # scout, tracker, interceptor, support
+  return_roles: true
