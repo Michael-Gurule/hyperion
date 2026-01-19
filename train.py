@@ -109,14 +109,14 @@ def main(cfg: DictConfig):
 
     # Determine Device (MPS for Mac, Cuda for NVIDIA)
     device = torch.device(cfg.hardware.device)
-    logger.info(f"🚀 Initializing HYPERION on {device}")
+    logger.info(f"Initializing HYPERION on {device}")
 
     # --- 2. COMPONENT INITIALIZATION ---
 
     # A. Curriculum
     curriculum = None
     if cfg.curriculum.enabled:
-        logger.info("📚 Initializing Curriculum Scheduler...")
+        logger.info("Initializing Curriculum Scheduler...")
         # Map YAML stages to the Curriculum Config object
 
         curr_config = ParameterizedCurriculumConfig(
@@ -140,7 +140,7 @@ def main(cfg: DictConfig):
     intrinsic_calculator = None
     # Defaut to True for Base line; in practice, use cfg.intrinsic.enabled
     if True:
-        logger.info("🧠 Initializing Intrinsic Motivation...")
+        logger.info(" Initializing Intrinsic Motivation...")
         int_cfg = IntrinsicRewardConfig(
             trailing_penalty_scale=0.5,
             geometry_bonus_scale=1.0,
@@ -151,7 +151,7 @@ def main(cfg: DictConfig):
     # E. Detection / Sensor Fusion
     sensor_fusion = None
     if cfg.detection.enabled:
-        logger.info("🎯 Initializing Sensor Fusion...")
+        logger.info("Initializing Sensor Fusion...")
         sensor_fusion = SensorFusion(
             state_dim=cfg.detection.kalman.state_dim,
             process_noise=cfg.detection.kalman.process_noise,
@@ -162,7 +162,7 @@ def main(cfg: DictConfig):
     swarm_gnn = None
     coordination_head = None
     if cfg.communication.enabled:
-        logger.info("📡 Initializing GNN Communication Layer...")
+        logger.info("Initializing GNN Communication Layer...")
         swarm_gnn = SwarmGNN(
             obs_dim=obs_dim,
             hidden_dim=cfg.communication.gnn.hidden_dim,
@@ -181,7 +181,7 @@ def main(cfg: DictConfig):
 
     # G. Agent / Policy (The "Brain")
     if cfg.agent.name == "mappo_gnn" or cfg.agent.get("use_hierarchical", False):
-        logger.info("🤖 Loaded Hierarchical MAPPO Agent")
+        logger.info("Loaded Hierarchical MAPPO Agent")
         policy_config = HierarchicalPolicyConfig(
             action_dim=action_dim,
             role_update_interval=10,
@@ -195,7 +195,7 @@ def main(cfg: DictConfig):
             device=device,
         )
     else:
-        logger.info(f"🤖 Loaded Standard {cfg.agent.algorithm} Agent")
+        logger.info(f" Loaded Standard {cfg.agent.algorithm} Agent")
         mappo_config = MAPPOConfig(
             actor_lr=cfg.agent.hyperparameters.lr,
             critic_lr=cfg.agent.hyperparameters.lr * 3,
@@ -219,7 +219,7 @@ def main(cfg: DictConfig):
 
     # Create checkpoint directory based on Hydra output
     ckpt_dir = os.getcwd()  # Hydra changes CWD to 'outputs/date/time'
-    logger.info(f"💾 Checkpoints will save to: {ckpt_dir}")
+    logger.info(f"Checkpoints will save to: {ckpt_dir}")
 
     try:
         pbar = tqdm(
@@ -256,7 +256,7 @@ def main(cfg: DictConfig):
                 # --- GNN Communication: Enhance observations with swarm context ---
                 coordination_score = 0.0
 
-                if swarm_gnn is not None:
+                if swarm_gnn is not None and coordination_head is not None:
                     # Extract agent positions from environment
                     agent_positions = []
                     agent_obs_list = []
@@ -276,7 +276,9 @@ def main(cfg: DictConfig):
                             np.array(agent_obs_list), dtype=torch.float32, device=device
                         )
                         pos_tensor = torch.tensor(
-                            np.array(agent_positions), dtype=torch.float32, device=device
+                            np.array(agent_positions),
+                            dtype=torch.float32,
+                            device=device,
                         )
 
                         # Forward through GNN
@@ -297,7 +299,9 @@ def main(cfg: DictConfig):
 
                             if role_probs is not None:
                                 # Track role distribution [scout, tracker, interceptor, support]
-                                gnn_role_distribution = role_probs.mean(dim=0).cpu().numpy()
+                                gnn_role_distribution = (
+                                    role_probs.mean(dim=0).cpu().numpy()
+                                )
 
                 episode_coordination_score += coordination_score
 
@@ -492,16 +496,24 @@ def main(cfg: DictConfig):
                     role_names = ["scout", "tracker", "interceptor", "support"]
                     for i, role_name in enumerate(role_names):
                         if i < len(gnn_role_distribution):
-                            wandb.log({f"gnn/role_{role_name}": float(gnn_role_distribution[i])})
+                            wandb.log(
+                                {
+                                    f"gnn/role_{role_name}": float(
+                                        gnn_role_distribution[i]
+                                    )
+                                }
+                            )
 
             episodes += 1
             pbar.update(1)
-            pbar.set_postfix({
-                "reward": f"{episode_reward:.2f}",
-                "stage": curriculum.stage_name if curriculum else "Default",
-                "det_conf": f"{avg_detection_confidence:.2f}",
-                "coord": f"{avg_coordination_score:.2f}" if swarm_gnn else "N/A",
-            })
+            pbar.set_postfix(
+                {
+                    "reward": f"{episode_reward:.2f}",
+                    "stage": curriculum.stage_name if curriculum else "Default",
+                    "det_conf": f"{avg_detection_confidence:.2f}",
+                    "coord": f"{avg_coordination_score:.2f}" if swarm_gnn else "N/A",
+                }
+            )
 
             # Curriculum Update
             if curriculum:
@@ -509,7 +521,7 @@ def main(cfg: DictConfig):
                 success = episode_reward > 50
                 res = curriculum.update(success, episode_reward)
                 if res["stage_changed"]:
-                    logger.info(f"📈 Promoting to Stage: {res.get('new_stage_name')}")
+                    logger.info(f"Promoting to Stage: {res.get('new_stage_name')}")
                     env = create_env_from_hydra(cfg, curriculum)
 
     except KeyboardInterrupt:
