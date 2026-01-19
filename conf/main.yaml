@@ -6,6 +6,7 @@ defaults:
   - curriculum: linear_stages
   - hardware: local_mac
   - detection: kalman_fusion
+  - communication: gnn_enabled
   - override hydra/job_logging: disabled 
   
 

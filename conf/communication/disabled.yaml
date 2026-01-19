@@ -1,0 +1,22 @@
+# conf/communication/disabled.yaml
+
+# GNN Communication Disabled (Control Group)
+name: "disabled"
+
+enabled: false
+
+# Placeholder values (not used when disabled)
+gnn:
+  hidden_dim: 128
+  embed_dim: 64
+  num_layers: 3
+  heads: 4
+  dropout: 0.1
+
+graph:
+  communication_range: 1500.0
+  max_neighbors: 10
+
+coordination:
+  num_roles: 4
+  return_roles: false
